@@ -2,7 +2,7 @@
 // QGIS, ArcGIS Pro and GDAL, with the track as a LineString layer and the features as a Point layer.
 // Each feature row keeps its accuracy, heading, time and its photo (as the photo file name and the
 // JPEG bytes), so a single shared .gpkg is enough to review the walk.
-import { LIMITS, WALK_SCHEMA, isFix, summarizeTrack, trackFixes } from './walk-core.mjs';
+import { LIMITS, WALK_SCHEMA, isFix, pinWalk, positionStatement, readWalkRecord, summarizeTrack, trackFixes, walkRecord } from './walk-core.mjs';
 
 const GPKG_APPLICATION_ID = 0x47504b47; // "GPKG"
 const GPKG_USER_VERSION = 10400; // 1.4.0
@@ -46,7 +46,10 @@ const placed = f => Number.isFinite(f?.lat) && Number.isFinite(f?.lon) && Number
  * Build the .gpkg bytes. `SQL` is an initialised sql.js module; `photos` maps a feature's
  * photo name (photos/f-1.jpg) to its JPEG bytes.
  */
-export function buildGeoPackage(SQL, walk, { photos = new Map(), now = Date.now() } = {}) {
+export function buildGeoPackage(SQL, raw, { photos = new Map(), now = Date.now() } = {}) {
+  const statement = positionStatement(raw);
+  const walk = pinWalk(raw).walk;
+  const markNames = new Map((raw.marks ?? []).map(m => [m.featureId, m.name]));
   const db = new SQL.Database();
   try {
     db.run(`PRAGMA application_id = ${GPKG_APPLICATION_ID}; PRAGMA user_version = ${GPKG_USER_VERSION};`);
@@ -72,33 +75,64 @@ export function buildGeoPackage(SQL, walk, { photos = new Map(), now = Date.now(
     const bbox = coords => coords.length ? [Math.min(...coords.map(c => c[0])), Math.min(...coords.map(c => c[1])), Math.max(...coords.map(c => c[0])), Math.max(...coords.map(c => c[1]))] : [null, null, null, null];
 
     db.run(`CREATE TABLE track (fid INTEGER PRIMARY KEY AUTOINCREMENT, geom LINESTRING, name TEXT, started_at TEXT, ended_at TEXT,
-      length_m REAL, gps_fixes INTEGER, weak_fixes_left_out INTEGER, tracking_gaps INTEGER, map_position_95_m REAL, map_position_basis TEXT,
-      shape_accuracy TEXT, walk_id TEXT, schema TEXT)`);
+      length_m REAL, gps_fixes INTEGER, weak_fixes_left_out INTEGER, tracking_gaps INTEGER, map_position_m REAL, map_position_basis TEXT,
+      surveyed_marks INTEGER, pin_shift_m REAL, shape_accuracy TEXT, walk_id TEXT, schema TEXT)`);
     db.run('INSERT INTO gpkg_contents (table_name,data_type,identifier,description,last_change,min_x,min_y,max_x,max_y,srs_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
       ['track', 'features', `${walk.name} track`, 'Phone GPS track; fixes worse than 50 m are left off the line', stamp, ...bbox(line), WGS84]);
     db.run("INSERT INTO gpkg_geometry_columns VALUES ('track','geom','LINESTRING',?,0,0)", [WGS84]);
-    db.run('INSERT INTO track (geom,name,started_at,ended_at,length_m,gps_fixes,weak_fixes_left_out,tracking_gaps,map_position_95_m,map_position_basis,shape_accuracy,walk_id,schema) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', [
+    db.run('INSERT INTO track (geom,name,started_at,ended_at,length_m,gps_fixes,weak_fixes_left_out,tracking_gaps,map_position_m,map_position_basis,surveyed_marks,pin_shift_m,shape_accuracy,walk_id,schema) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [
       line.length >= 2 ? lineGeometry(line) : null, walk.name, iso(walk.startedAt), iso(walk.endedAt), summary.lengthMetres, summary.fixes,
-      summary.weakFixes, summary.gaps, summary.map.metres, summary.map.metres === null ? summary.map.reason : 'phone GPS, 95% of fixes within this radius',
+      summary.weakFixes, summary.gaps, statement.metres, statement.note, statement.pin?.marks ?? 0, statement.pin?.shiftMetres ?? null,
       'not measured by a phone camera walk', walk.id, WALK_SCHEMA]);
 
     db.run(`CREATE TABLE features (fid INTEGER PRIMARY KEY AUTOINCREMENT, geom POINT, feature_id TEXT, type TEXT, label TEXT, note TEXT, time_utc TEXT,
-      accuracy_95_m REAL, fix_age_s REAL, heading_deg REAL, video_s REAL, photo TEXT, photo_jpeg BLOB)`);
+      accuracy_95_m REAL, fix_age_s REAL, heading_deg REAL, video_s REAL, surveyed_mark TEXT, photo TEXT, photo_jpeg BLOB)`);
     const pointCoords = points.map(f => [f.lon, f.lat]);
     db.run('INSERT INTO gpkg_contents (table_name,data_type,identifier,description,last_change,min_x,min_y,max_x,max_y,srs_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
       ['features', 'features', `${walk.name} features`, 'Features tapped during the walk, at the nearest GPS fix within 10 s', stamp, ...bbox(pointCoords), WGS84]);
     db.run("INSERT INTO gpkg_geometry_columns VALUES ('features','geom','POINT',?,0,0)", [WGS84]);
-    const insert = db.prepare('INSERT INTO features (geom,feature_id,type,label,note,time_utc,accuracy_95_m,fix_age_s,heading_deg,video_s,photo,photo_jpeg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+    const insert = db.prepare('INSERT INTO features (geom,feature_id,type,label,note,time_utc,accuracy_95_m,fix_age_s,heading_deg,video_s,surveyed_mark,photo,photo_jpeg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const f of walk.features ?? []) {
       const jpeg = f.photo && photos.get(f.photo);
       insert.run([placed(f) ? pointGeometry(f.lon, f.lat) : null, f.id, f.type, f.label, f.note || null, iso(f.t),
-        placed(f) ? f.acc : null, f.fixAgeSeconds, f.heading, f.videoSeconds, f.photo, jpeg && jpeg.length <= LIMITS.photoBytes ? jpeg : null]);
+        placed(f) ? f.acc : null, f.fixAgeSeconds, f.heading, f.videoSeconds, markNames.get(f.id) ?? null, f.photo, jpeg && jpeg.length <= LIMITS.photoBytes ? jpeg : null]);
     }
     insert.free();
+
+    // The whole walk record rides along as a non-spatial table, so the .gpkg alone reopens in Walk.
+    db.run('CREATE TABLE walk_record (id INTEGER PRIMARY KEY, schema TEXT NOT NULL, json TEXT NOT NULL)');
+    db.run("INSERT INTO gpkg_contents (table_name,data_type,identifier,description,last_change) VALUES ('walk_record','attributes',?,?,?)",
+      [`${walk.name} walk record`, 'BrainSNN Walk record (brainsnn.walk.v1): GPS fixes with their accuracy, features and marks', stamp]);
+    db.run('INSERT INTO walk_record (schema,json) VALUES (?,?)', [WALK_SCHEMA, JSON.stringify(walkRecord(raw))]);
     return db.export();
   } finally {
     db.close();
   }
+}
+
+const SQLITE_MAGIC = 'SQLite format 3\u0000';
+export const looksLikeGeoPackage = bytes => bytes.length > 100 && new TextDecoder().decode(bytes.subarray(0, 16)) === SQLITE_MAGIC;
+
+/** Reopen a GeoPackage made by Walk: the validated walk record plus each feature's photo. */
+export function readGeoPackage(SQL, bytes) {
+  if (!looksLikeGeoPackage(bytes)) throw new Error('This is not a GeoPackage.');
+  let db;
+  try { db = new SQL.Database(bytes); } catch { throw new Error('The GeoPackage could not be opened.'); }
+  try {
+    const one = sql => { try { return db.exec(sql)[0]?.values ?? []; } catch { return []; } };
+    if (one('PRAGMA application_id')[0]?.[0] !== GPKG_APPLICATION_ID) throw new Error('This SQLite file is not a GeoPackage.');
+    const [row] = one(`SELECT json FROM walk_record WHERE schema = '${WALK_SCHEMA}' LIMIT 1`);
+    if (!row) throw new Error('This GeoPackage was not made by BrainSNN Walk, so it has no walk record to open.');
+    let parsed;
+    try { parsed = JSON.parse(row[0]); } catch { throw new Error('The walk record inside the GeoPackage is damaged.'); }
+    const walk = readWalkRecord(parsed);
+    const photos = new Map();
+    const wanted = new Set(walk.features.map(f => f.photo).filter(Boolean));
+    for (const [photo, jpeg] of one('SELECT photo, photo_jpeg FROM features WHERE photo_jpeg IS NOT NULL')) {
+      if (wanted.has(photo) && jpeg instanceof Uint8Array && jpeg.length <= LIMITS.photoBytes) photos.set(photo, jpeg);
+    }
+    return { walk: { ...walk, video: null }, photos, video: null };
+  } finally { db.close(); }
 }
 
 // ---------- browser loader ----------

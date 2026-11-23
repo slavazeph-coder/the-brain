@@ -30,15 +30,17 @@ def at(metres_north: float, accuracy: float = 5.0):
     return {'latitude': START['latitude'] + metres_north * M, 'longitude': START['longitude'], 'accuracy': accuracy}
 
 
-def check_geopackage(path: Path, *, features: int, photos: int):
+def check_geopackage(path: Path, *, features: int, photos: int, marks: int):
     with closing(sqlite3.connect(path)) as db:
         assert db.execute('PRAGMA application_id').fetchone()[0] == 0x47504B47
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         layers = db.execute('SELECT table_name, geometry_type_name, srs_id FROM gpkg_geometry_columns ORDER BY table_name').fetchall()
+        assert db.execute("SELECT data_type FROM gpkg_contents WHERE table_name='walk_record'").fetchone() == ('attributes',)
         assert layers == [('features', 'POINT', 4326), ('track', 'LINESTRING', 4326)], layers
         assert db.execute('SELECT COUNT(*) FROM features').fetchone()[0] == features
         assert db.execute('SELECT COUNT(*) FROM features WHERE photo_jpeg IS NOT NULL').fetchone()[0] == photos
-        assert db.execute('SELECT map_position_95_m FROM track').fetchone()[0] == 5
+        assert db.execute('SELECT surveyed_marks FROM track').fetchone()[0] == marks
+        assert db.execute('SELECT COUNT(*) FROM features WHERE surveyed_mark IS NOT NULL').fetchone()[0] == marks
         blob = db.execute('SELECT geom FROM features WHERE geom IS NOT NULL LIMIT 1').fetchone()[0]
         assert blob[:2] == b'GP' and int.from_bytes(blob[4:8], 'little') == 4326
 
@@ -134,6 +136,30 @@ def verify_browser(browser_type, url, output: Path):
         expect(page.locator('#measure-out')).to_contain_text('±')
         measured = page.locator('#measure-out').inner_text()
         assert 'Light pole by the gate to Drain: 26' in measured, measured
+        page.locator('#measure').click()
+
+        # Pin two features to surveyed marks 3 m north of where the phone put them.
+        for index, metres, mark_name in ((0, 13.0, 'PK nail 1'), (1, 39.0, 'PK nail 2')):
+            page.locator('[data-select]').nth(index).click()
+            mark = page.locator('.mark-form')
+            expect(mark).to_be_visible()
+            mark.locator('[name=markLat]').fill(f"{START['latitude'] + metres * M:.8f}")
+            mark.locator('[name=markLon]').fill(f"{START['longitude']:.8f}")
+            mark.locator('[name=markName]').fill(mark_name)
+            mark.locator('[data-mark=save]').click()
+            expect(page.locator('#result-status')).to_contain_text(f'{mark_name} pinned')
+            if index == 0:
+                expect(page.locator('#map-value')).to_have_text('Unchecked')
+                expect(page.locator('#map-note')).to_contain_text('Pinned to 1 surveyed mark')
+        expect(page.locator('#map-value')).to_contain_text('±')
+        expect(page.locator('#map-note')).to_have_text('Pinned to 2 surveyed marks · largest leave-one-out miss')
+        expect(page.locator('#feature-list')).to_contain_text('pinned to PK nail 2')
+        bad = page.locator('[data-select]').nth(2)
+        bad.click()
+        page.locator('.mark-form [name=markLat]').fill('95')
+        page.locator('.mark-form [name=markLon]').fill('-75')
+        page.locator('.mark-form [data-mark=save]').click()
+        expect(page.locator('#result-status')).to_contain_text('decimal degrees')
         no_overflow(page, f'{name} results 390')
         page.screenshot(path=str(output / f'walk-{name}-results.png'), full_page=True)
 
@@ -144,14 +170,15 @@ def verify_browser(browser_type, url, output: Path):
         geo = json.loads(Path(download.value.path()).read_text())
         assert geo['type'] == 'FeatureCollection' and geo['features'][0]['geometry']['type'] == 'LineString'
         assert [f['properties']['type'] for f in geo['features'][1:]] == ['pole', 'drain', 'hazard', 'sign']
-        assert geo['features'][0]['properties']['map_position_95_m'] == 5
+        assert geo['features'][0]['properties']['surveyed_marks'] == 2
+        assert geo['features'][0]['properties']['map_position_basis'] == 'Pinned to 2 surveyed marks · largest leave-one-out miss'
         # GeoPackage: the walk's own SQLite file, the format QGIS and ArcGIS Pro open directly.
         page.locator('#export').click()
         with page.expect_download() as download:
             page.locator('[data-export="gpkg"]').click()
         gpkg = output / f'walk-{name}.gpkg'
         download.value.save_as(gpkg)
-        check_geopackage(gpkg, features=4, photos=4 if camera else 0)
+        check_geopackage(gpkg, features=4, photos=4 if camera else 0, marks=2)
         page.locator('#export').click()
         if camera:
             page.locator('#include-video').check()
@@ -174,9 +201,20 @@ def verify_browser(browser_type, url, output: Path):
         expect(page.locator('#delete-walk')).to_be_hidden()
         expect(page.locator('#rename')).to_be_hidden()
         expect(page.locator('#feature-list > li')).to_have_count(4)
-        expect(page.locator('#map-value')).to_have_text('±5 m')
+        expect(page.locator('#map-note')).to_contain_text('Pinned to 2 surveyed marks')
+        page.locator('#back').click()
+        # The GeoPackage alone reopens the walk read-only, like the zip.
+        page.locator('#open-shared').set_input_files(str(gpkg))
+        expect(page.locator('#shared-badge')).to_be_visible()
+        expect(page.locator('#feature-list > li')).to_have_count(4)
+        expect(page.locator('#map-note')).to_contain_text('Pinned to 2 surveyed marks')
+        expect(page.locator('#build-3d')).to_be_disabled()
         page.locator('#keep-copy').click()
         expect(page.locator('#shared-badge')).to_be_hidden()
+        page.locator('#rename').click()
+        page.locator('#rename-input').fill('Shared copy')
+        page.locator('#rename-form button[type=submit]').click()
+        expect(page.locator('#walk-title')).to_have_text('Shared copy')
         page.locator('#back').click()
         expect(page.locator('#walk-list > li')).to_have_count(2)
 
@@ -209,7 +247,7 @@ def verify_browser(browser_type, url, output: Path):
 
         # --- hand the walk's video to World Builder, on this device ---
         if camera:
-            page.locator('#walk-list .walk-card').last.click()
+            page.locator('#walk-list .walk-card', has_text='Walk 1').first.click()
             page.locator('#build-3d').click()
             page.wait_for_url('**/world/index.html#handoff=*', timeout=10000)
             expect(page.locator('#status')).to_contain_text('Loaded 1 local capture file', timeout=20000)

@@ -51,6 +51,27 @@ encryption, ZIP64, checksum mismatches and entries that inflate past their decla
 deflated entries where the browser has `DecompressionStream`. **Keep a copy on this phone** turns a shared
 walk into an editable local one.
 
+## Surveyed marks
+
+A feature dropped on a monument, PK nail or benchmark can be pinned to that mark's surveyed WGS 84 position (from
+the feature's detail). Phone GPS error over a short walk is mostly a shared offset, so the whole walk (track and
+features) is shifted by the mean offset of its marks. The other figures depend on how many marks there are:
+- **One mark** moves the walk onto it but cannot check itself. The map-position figure reads **Unchecked**, with
+  the size of the move.
+- **Two or more marks:** each mark is predicted from the others (leave-one-out), and the **largest miss** is the
+  stated figure. A mark surveyed in the wrong place shows up as a large miss.
+
+Exports use the shifted coordinates and name each feature's mark. `walk.json` and the GeoPackage's `walk_record`
+keep the raw GPS and the marks, so nothing is lost. Marks are treated as exact: their own survey accuracy is not
+modelled.
+
+## Opening shared walks
+
+**Open a shared walk** accepts the `.zip` bundle or the `.gpkg` alone. The GeoPackage carries the whole walk record
+in a non-spatial `walk_record` table (registered as `attributes` in `gpkg_contents`) plus each feature's photo, so
+it reopens read-only exactly like the bundle (except the video). A GeoPackage from another tool has no walk record
+and is refused with that reason.
+
 ## Map
 
 North-up, in local metres. Pinch or scroll to zoom (up to 40×), and drag to move once zoomed in. Double-tap or press
@@ -83,5 +104,4 @@ This button stages the walk's video through the existing same-origin handoff
   AR tracking, so these need a native iOS capture app. Such an app would also produce the existing
   `brainsnn.capture.v1` bundle (see `world-native-capture.md`).
 - COPC point clouds and orthophotos (these need LiDAR or a reconstruction).
-- Survey-control pins.
 - A basemap. The map draws in local metres with a scale bar and north arrow, and no tiles are fetched.

@@ -23,6 +23,7 @@ export const LIMITS = Object.freeze({
   photoBytes: 4 * 1024 ** 2,
   videoBytes: 120 * 1024 ** 2,
   bundleBytes: 512 * 1024 ** 2,
+  marks: 20,
 });
 
 export const FEATURE_TYPES = Object.freeze([
@@ -189,6 +190,57 @@ export function defaultWalkName(existing = []) {
   for (let n = existing.length + 1; ; n += 1) if (!used.has(`Walk ${n}`)) return `Walk ${n}`;
 }
 
+// ---------- surveyed marks ----------
+// A feature dropped on a surveyed mark (monument, PK nail, benchmark) can be given the mark's known
+// coordinates. Phone GPS error over a short walk is mostly a shared offset, so the walk is shifted by
+// the mean offset of its marks. With two or more marks, each mark is predicted from the others
+// (leave-one-out) and the largest miss is the stated figure; one mark moves the walk but cannot
+// check itself, so it states no figure.
+
+export function readMark(raw, featureIds) {
+  if (!raw || typeof raw.featureId !== 'string' || !featureIds.has(raw.featureId)) throw new Error('A surveyed mark must belong to a feature of this walk.');
+  if (!finite(raw.lat) || !finite(raw.lon) || raw.lat < -90 || raw.lat > 90 || raw.lon < -180 || raw.lon > 180) throw new Error('A surveyed mark needs a latitude and longitude in decimal degrees.');
+  return { featureId: raw.featureId, lat: raw.lat, lon: raw.lon, name: cleanText(raw.name, LIMITS.labelChars) || 'Surveyed mark' };
+}
+
+export function pinWalk(walk) {
+  const byId = new Map((walk.features ?? []).map(f => [f.id, f]));
+  const marks = (walk.marks ?? []).filter(mark => placed(byId.get(mark.featureId)));
+  if (!marks.length) return { walk, pin: null };
+  const project = projector(marks[0]);
+  const offsets = marks.map(mark => {
+    const known = project(mark), seen = project(byId.get(mark.featureId));
+    return { featureId: mark.featureId, x: known.x - seen.x, y: known.y - seen.y };
+  });
+  const mean = list => ({ x: list.reduce((a, o) => a + o.x, 0) / list.length, y: list.reduce((a, o) => a + o.y, 0) / list.length });
+  const shift = mean(offsets);
+  const residuals = offsets.length < 2 ? [] : offsets.map((o, i) => {
+    const others = mean(offsets.filter((_, j) => j !== i));
+    return { featureId: o.featureId, metres: round(Math.hypot(o.x - others.x, o.y - others.y), 2) };
+  });
+  const dLat = shift.y / EARTH_RADIUS * 180 / Math.PI;
+  const dLon = shift.x / (EARTH_RADIUS * Math.cos(rad(marks[0].lat))) * 180 / Math.PI;
+  const move = point => ({ ...point, lat: point.lat + dLat, lon: point.lon + dLon });
+  return {
+    walk: { ...walk, fixes: (walk.fixes ?? []).map(f => isFix(f) ? move(f) : f), features: (walk.features ?? []).map(f => placed(f) ? move(f) : f) },
+    pin: { marks: marks.length, shiftMetres: round(Math.hypot(shift.x, shift.y), 2), east: round(shift.x, 2), north: round(shift.y, 2), residuals,
+      checkMetres: residuals.length ? round(Math.max(...residuals.map(r => r.metres)), 2) : null },
+  };
+}
+
+/** The one map-position statement every screen and export uses. */
+export function positionStatement(walk) {
+  const { pin } = pinWalk(walk);
+  if (pin) {
+    const marks = `${pin.marks} surveyed mark${pin.marks === 1 ? '' : 's'}`;
+    return pin.checkMetres === null
+      ? { metres: null, basis: 'surveyed-mark', note: `Pinned to ${marks} (moved ${formatMetres(pin.shiftMetres)}). One mark cannot check itself; pin a second for a figure.`, pin }
+      : { metres: pin.checkMetres, basis: 'surveyed-mark', note: `Pinned to ${marks} · largest leave-one-out miss`, pin };
+  }
+  const map = summarizeTrack(walk.fixes, walk).map;
+  return { metres: map.metres, basis: 'phone-gps', note: map.metres === null ? map.reason : `Phone GPS · 95% of ${map.fixes} fix${map.fixes === 1 ? '' : 'es'} were within this`, pin: null };
+}
+
 // ---------- exports ----------
 
 const iso = t => finite(t) ? new Date(t).toISOString() : '';
@@ -199,7 +251,9 @@ export function trackFixes(walk) {
   return (walk?.fixes ?? []).filter(fix => isFix(fix) && fix.acc <= LIMITS.weakFixMetres).sort((a, b) => a.t - b.t);
 }
 
-export function toGeoJSON(walk) {
+export function toGeoJSON(raw) {
+  const statement = positionStatement(raw);
+  const walk = pinWalk(raw).walk;
   const summary = summarizeTrack(walk.fixes, walk);
   const line = trackFixes(walk);
   const features = [];
@@ -209,7 +263,8 @@ export function toGeoJSON(walk) {
     properties: {
       kind: 'track', name: walk.name, started_at: iso(walk.startedAt), ended_at: iso(walk.endedAt),
       length_m: summary.lengthMetres, gps_fixes: summary.fixes, weak_fixes_left_out: summary.weakFixes, tracking_gaps: summary.gaps,
-      map_position_95_m: summary.map.metres, map_position_basis: 'phone GPS, 95% of fixes within this radius',
+      map_position_m: statement.metres, map_position_basis: statement.note, surveyed_marks: statement.pin?.marks ?? 0,
+      pin_shift_m: statement.pin?.shiftMetres ?? null,
       shape_accuracy: 'not measured by a phone camera walk',
     },
   });
@@ -226,7 +281,8 @@ export function toGeoJSON(walk) {
   return { type: 'FeatureCollection', name: walk.name, brainsnn: { schema: WALK_SCHEMA, id: walk.id }, features };
 }
 
-export function toGPX(walk) {
+export function toGPX(raw) {
+  const walk = pinWalk(raw).walk;
   const line = trackFixes(walk);
   const points = (walk.features ?? []).filter(placed);
   const rows = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -250,19 +306,24 @@ const csvCell = value => {
   return /[",\n\r]/u.test(text) ? `"${text.replace(/"/gu, '""')}"` : text;
 };
 
-export function toCSV(walk) {
-  const header = ['id', 'type', 'label', 'note', 'time_utc', 'latitude', 'longitude', 'accuracy_95_m', 'heading_deg', 'photo'];
-  const rows = (walk.features ?? []).map(f => [f.id, f.type, f.label, f.note, iso(f.t), placed(f) ? coord(f.lat) : '', placed(f) ? coord(f.lon) : '', f.acc ?? '', f.heading ?? '', f.photo ?? '']);
+export function toCSV(raw) {
+  const walk = pinWalk(raw).walk;
+  const marks = new Map((raw.marks ?? []).map(m => [m.featureId, m.name]));
+  const header = ['id', 'type', 'label', 'note', 'time_utc', 'latitude', 'longitude', 'accuracy_95_m', 'heading_deg', 'photo', 'surveyed_mark'];
+  const rows = (walk.features ?? []).map(f => [f.id, f.type, f.label, f.note, iso(f.t), placed(f) ? coord(f.lat) : '', placed(f) ? coord(f.lon) : '', f.acc ?? '', f.heading ?? '', f.photo ?? '', marks.get(f.id) ?? '']);
   return [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
 export function readmeText(walk) {
   const summary = summarizeTrack(walk.fixes, walk);
+  const statement = positionStatement(walk);
   return [
     `${walk.name} — BrainSNN Walk`,
     '',
     `Walked ${iso(walk.startedAt)} to ${iso(walk.endedAt)}: about ${formatMetres(summary.lengthMetres)}, ${(walk.features ?? []).length} features.`,
-    summary.map.metres === null ? `Map position: withheld. ${summary.map.reason}` : `Map position: ±${summary.map.metres} m, phone GPS. 95% of the walk's fixes reported this radius or better.`,
+    statement.basis === 'surveyed-mark'
+      ? `Map position: ${statement.metres === null ? 'unchecked' : `±${statement.metres} m`}. ${statement.note}. Coordinates in the exports are shifted onto the marks; walk.json keeps the raw GPS.`
+      : summary.map.metres === null ? `Map position: withheld. ${summary.map.reason}` : `Map position: ±${summary.map.metres} m, phone GPS. 95% of the walk's fixes reported this radius or better.`,
     'Shape accuracy: not measured. A phone camera walk does not measure shapes or distances by itself.',
     '',
     'Files: walk.gpkg (GeoPackage: track and features with their photos) opens in QGIS and ArcGIS Pro.',
@@ -279,6 +340,7 @@ export function walkRecord(walk) {
     schema: WALK_SCHEMA, id: walk.id, name: walk.name, startedAt: walk.startedAt, endedAt: walk.endedAt,
     fixes: (walk.fixes ?? []).filter(isFix).map(({ t, lat, lon, acc, alt = null, altAcc = null }) => ({ t, lat, lon, acc, alt: finite(alt) ? alt : null, altAcc: finite(altAcc) ? altAcc : null })),
     features: walk.features ?? [],
+    marks: walk.marks ?? [],
     video: walk.video ?? null,
   };
 }
@@ -305,13 +367,21 @@ export function readWalkRecord(value) {
     if (fix && !isFix(fix)) fail('The walk contains a feature with an invalid position.');
     return { ...feature, fixAgeSeconds: finite(raw.fixAgeSeconds) ? raw.fixAgeSeconds : feature.fixAgeSeconds };
   });
+  if (value.marks !== undefined && (!Array.isArray(value.marks) || value.marks.length > LIMITS.marks)) fail(`A walk can hold up to ${LIMITS.marks} surveyed marks.`);
+  const marks = [];
+  for (const raw of value.marks ?? []) {
+    let mark;
+    try { mark = readMark(raw, ids); } catch (error) { fail(error.message); }
+    if (marks.some(m => m.featureId === mark.featureId)) fail('The walk pins one feature to two marks.');
+    marks.push(mark);
+  }
   let video = null;
   if (value.video) {
     const v = value.video;
     if (typeof v.name !== 'string' || !/^video\.(mp4|webm)$/u.test(v.name) || !finite(v.bytes) || v.bytes <= 0 || v.bytes > LIMITS.videoBytes) fail('The walk names an invalid video.');
     video = { name: v.name, bytes: v.bytes, type: v.name.endsWith('.mp4') ? 'video/mp4' : 'video/webm' };
   }
-  return { id: value.id, name, startedAt: value.startedAt, endedAt: value.endedAt, fixes, features, video };
+  return { id: value.id, name, startedAt: value.startedAt, endedAt: value.endedAt, fixes, features, marks, video };
 }
 
 /** The files of a walk bundle, in order, as {name, data} where data is a string or a byte array. */

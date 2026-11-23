@@ -8,7 +8,7 @@ const niceLength = metres => {
   return [1, 2, 5, 10].map(n => n * power).filter(n => n <= metres).at(-1) ?? power;
 };
 
-export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = true, showError = false, selectedId = null, measure = [], zoom = 1, panX = 0, panY = 0, dpr = globalThis.devicePixelRatio || 1 } = {}) {
+export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = true, showError = false, selectedId = null, measure = [], markedIds = new Set(), zoom = 1, panX = 0, panY = 0, dpr = globalThis.devicePixelRatio || 1 } = {}) {
   // Never draw into a collapsed canvas: a hidden or still-laying-out canvas reports 0 or a few px.
   const width = Math.max(160, canvas.clientWidth || 360), height = Math.max(160, canvas.clientHeight || 320);
   canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
@@ -87,6 +87,7 @@ export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = tru
         g.beginPath(); g.arc(s.x, s.y, Math.max(0, f.acc * fit), 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
       }
       if (f.id === selectedId || measure.includes(f.id)) { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(s.x, s.y, 15, 0, Math.PI * 2); g.fill(); }
+      if (markedIds.has(f.id)) { g.strokeStyle = '#ffd84d'; g.lineWidth = 3; g.strokeRect(s.x - 17, s.y - 17, 34, 34); }
       g.fillStyle = featureType(f.type).colour; g.beginPath(); g.arc(s.x, s.y, 12, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#0b0d15'; g.fillText(String(number), s.x, s.y + 0.5);
       hits.push({ id: f.id, x: s.x, y: s.y });

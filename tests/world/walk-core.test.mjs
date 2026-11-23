@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
-  FEATURE_TYPES, LIMITS, WALK_SCHEMA, bundleEntries, createTrackMeter, defaultWalkName, fixNear, formatDuration, formatMetres,
+  FEATURE_TYPES, LIMITS, WALK_SCHEMA, bundleEntries, pinWalk, positionStatement, createTrackMeter, defaultWalkName, fixNear, formatDuration, formatMetres,
   haversine, isFix, makeFeature, mapAccuracy, measureBetween, percentile, placeFeatures, projector, readBundle, readWalkRecord,
   summarizeTrack, toCSV, toGPX, toGeoJSON, walkRecord,
 } from '../../brainsnn-r3f-app/public/walk/walk-core.mjs';
@@ -103,14 +103,15 @@ test('exports open in GIS tools and refuse to smuggle formulas', () => {
   assert.equal(geo.features[0].geometry.type, 'LineString');
   assert.deepEqual(geo.features[1].geometry.coordinates, [-75, Math.round(fixes[10].lat * 1e7) / 1e7]);
   assert.equal(geo.features[2].geometry, null, 'an unplaced feature keeps no geometry');
-  assert.equal(geo.features[0].properties.map_position_95_m, 5);
+  assert.equal(geo.features[0].properties.map_position_m, 5);
+  assert.equal(geo.features[0].properties.surveyed_marks, 0);
   const gpx = toGPX(w);
   assert.match(gpx, /<gpx version="1.1"/u);
   assert.equal((gpx.match(/<wpt /gu) || []).length, 1);
   assert.equal((gpx.match(/<trkpt /gu) || []).length, 61);
   assert.ok(!gpx.includes('<b>'));
   const csv = toCSV(w).split('\r\n');
-  assert.equal(csv[0], 'id,type,label,note,time_utc,latitude,longitude,accuracy_95_m,heading_deg,photo');
+  assert.equal(csv[0], 'id,type,label,note,time_utc,latitude,longitude,accuracy_95_m,heading_deg,photo,surveyed_mark');
   assert.match(csv[1], /,"'=HYPERLINK\(""http:\/\/x""\)",/u);
   assert.match(csv[2], /^f-2,note,"Gate <b>""A""<\/b> & co",/u);
 });
@@ -202,4 +203,55 @@ test('the walk app ships as an installable, offline shell', async () => {
     './vendor/sql-wasm.js', './vendor/sql-wasm.wasm', '../world/capture-handoff.mjs'])
     assert.ok(shell.includes(`'${file}'`), `${file} is precached`);
   assert.match(shell, /const CACHE = 'brainsnn-walk-v\d+'/u);
+});
+
+test('surveyed marks shift the walk onto known points and check themselves leave-one-out', () => {
+  // Truth: three features 20 m apart going north. The phone saw everything 3 m east and 4 m north (a 5 m bias).
+  const E = 1 / (111195.08 * Math.cos(45 * Math.PI / 180));
+  const truth = [0, 20, 40].map(n => ({ lat: 45 + n * M, lon: -75 }));
+  const biased = p => ({ lat: p.lat + 4 * M, lon: p.lon + 3 * E });
+  const fixes = Array.from({ length: 41 }, (_, i) => ({ t: T0 + i * 1000, ...biased({ lat: 45 + i * M, lon: -75 }), acc: 8 }));
+  const features = truth.map((p, i) => makeFeature({ id: `f-${i + 1}`, type: 'pole', t: T0 + i * 20000, fix: { t: T0 + i * 20000, ...biased(p), acc: 8 } }));
+  const base = walk({ fixes, features, endedAt: T0 + 40000 });
+  assert.equal(positionStatement(base).basis, 'phone-gps');
+  assert.equal(positionStatement(base).metres, 8);
+
+  const one = { ...base, marks: [{ featureId: 'f-1', ...truth[0], name: 'PK nail 1' }] };
+  const single = positionStatement(one);
+  assert.equal(single.metres, null, 'one mark moves the walk but states no figure');
+  assert.match(single.note, /Pinned to 1 surveyed mark \(moved 5 m\)/u);
+  const moved = pinWalk(one).walk;
+  assert.ok(haversine(moved.features[2], truth[2]) < 0.01, 'the whole walk moves, not just the pinned feature');
+  assert.ok(haversine(moved.fixes[0], { lat: 45, lon: -75 }) < 0.01);
+
+  const three = { ...base, marks: truth.map((p, i) => ({ featureId: `f-${i + 1}`, ...p, name: `Mark ${i + 1}` })) };
+  const pinned = positionStatement(three);
+  assert.equal(pinned.pin.marks, 3);
+  assert.ok(Math.abs(pinned.pin.shiftMetres - 5) < 0.01);
+  assert.ok(pinned.metres < 0.01, 'a pure offset is removed exactly');
+  // One mark surveyed 1.5 m off: its leave-one-out miss shows it.
+  const noisy = { ...three, marks: three.marks.map((m, i) => i === 1 ? { ...m, lat: m.lat + 1.5 * M } : m) };
+  const check = positionStatement(noisy);
+  // The other two agree, so they predict the bad mark 1.5 m from where it was surveyed.
+  assert.equal(check.metres, 1.5);
+  assert.deepEqual(check.pin.residuals.map(r => r.metres), [0.75, 1.5, 0.75]);
+  assert.equal(check.note, 'Pinned to 3 surveyed marks · largest leave-one-out miss');
+  // Exports carry the shifted coordinates and the statement; walk.json keeps the raw GPS.
+  const geo = toGeoJSON(three);
+  assert.ok(Math.abs(geo.features[1].geometry.coordinates[1] - truth[0].lat) < 1e-7);
+  assert.equal(geo.features[0].properties.surveyed_marks, 3);
+  assert.match(toCSV(three).split('\r\n')[1], /,Mark 1$/u);
+  assert.equal(walkRecord(three).features[0].lat, features[0].lat);
+  assert.deepEqual(readWalkRecord(JSON.parse(JSON.stringify(walkRecord(three)))).marks, three.marks);
+});
+
+test('surveyed marks from someone else are validated', () => {
+  const good = walkRecord(walk({ features: [makeFeature({ id: 'f-1', type: 'pole', t: T0 + 5000, fix: north(6)[5] })] }));
+  for (const marks of [
+    [{ featureId: 'f-9', lat: 45, lon: -75 }],
+    [{ featureId: 'f-1', lat: 95, lon: -75 }],
+    [{ featureId: 'f-1', lat: 45, lon: -75 }, { featureId: 'f-1', lat: 45, lon: -75 }],
+    'x',
+  ]) assert.throws(() => readWalkRecord({ ...good, marks }), undefined, JSON.stringify(marks));
+  assert.equal(readWalkRecord({ ...good, marks: [{ featureId: 'f-1', lat: 45, lon: -75, name: '' }] }).marks[0].name, 'Surveyed mark');
 });

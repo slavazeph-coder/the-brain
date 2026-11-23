@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { makeFeature } from '../../brainsnn-r3f-app/public/walk/walk-core.mjs';
-import { buildGeoPackage, lineGeometry, pointGeometry } from '../../brainsnn-r3f-app/public/walk/walk-gpkg.mjs';
+import { buildGeoPackage, lineGeometry, looksLikeGeoPackage, pointGeometry, readGeoPackage } from '../../brainsnn-r3f-app/public/walk/walk-gpkg.mjs';
 
 const vendor = new URL('../../brainsnn-r3f-app/public/walk/vendor/', import.meta.url);
 // The vendored browser build is CommonJS, but this package is "type": "module"; load a .cjs copy.
@@ -50,10 +50,10 @@ test('a walk becomes a valid GeoPackage with a track layer and a feature layer',
     assert.deepEqual(rows(db, 'PRAGMA user_version'), [[10400]]);
     assert.deepEqual(rows(db, 'PRAGMA integrity_check'), [['ok']]);
     assert.deepEqual(rows(db, 'SELECT srs_id FROM gpkg_spatial_ref_sys ORDER BY srs_id'), [[-1], [0], [4326]]);
-    assert.deepEqual(rows(db, 'SELECT table_name, data_type, srs_id FROM gpkg_contents ORDER BY table_name'), [['features', 'features', 4326], ['track', 'features', 4326]]);
+    assert.deepEqual(rows(db, 'SELECT table_name, data_type, srs_id FROM gpkg_contents ORDER BY table_name'), [['features', 'features', 4326], ['track', 'features', 4326], ['walk_record', 'attributes', null]]);
     assert.deepEqual(rows(db, 'SELECT table_name, column_name, geometry_type_name, z, m FROM gpkg_geometry_columns ORDER BY table_name'),
       [['features', 'geom', 'POINT', 0, 0], ['track', 'geom', 'LINESTRING', 0, 0]]);
-    const [[length, fixCount, figure, basis]] = rows(db, 'SELECT length_m, gps_fixes, map_position_95_m, map_position_basis FROM track');
+    const [[length, fixCount, figure, basis]] = rows(db, 'SELECT length_m, gps_fixes, map_position_m, map_position_basis FROM track');
     assert.ok(length > 55 && length <= 60.5);
     assert.equal(fixCount, 31); assert.equal(figure, 6); assert.match(basis, /95%/u);
     const features = rows(db, 'SELECT feature_id, type, label, note, accuracy_95_m, heading_deg, photo, photo_jpeg, geom IS NULL FROM features ORDER BY fid');
@@ -71,8 +71,27 @@ test('a walk with no GPS still produces a readable GeoPackage', () => {
   const blind = { ...walk, fixes: [], features: [makeFeature({ id: 'f-9', type: 'door', t: T0 })] };
   const db = open(buildGeoPackage(SQL, blind));
   try {
-    assert.deepEqual(rows(db, 'SELECT geom IS NULL, map_position_95_m, map_position_basis FROM track'), [[1, null, 'No GPS fix. Indoors a phone often has none.']]);
+    assert.deepEqual(rows(db, 'SELECT geom IS NULL, map_position_m, map_position_basis FROM track'), [[1, null, 'No GPS fix. Indoors a phone often has none.']]);
     assert.deepEqual(rows(db, 'SELECT feature_id, geom IS NULL FROM features'), [['f-9', 1]]);
     assert.deepEqual(rows(db, "SELECT min_x FROM gpkg_contents WHERE table_name='features'"), [[null]]);
   } finally { db.close(); }
+});
+
+test('a Walk GeoPackage reopens as the same walk, photos included; other files are refused', () => {
+  const marked = { ...walk, marks: [{ featureId: 'f-1', lat: 45.00001, lon: -75.00001, name: 'Benchmark' }] };
+  const bytes = buildGeoPackage(SQL, marked, { photos: new Map([['photos/f-1.jpg', photo]]) });
+  assert.ok(looksLikeGeoPackage(bytes));
+  const opened = readGeoPackage(SQL, bytes);
+  assert.deepEqual(opened.walk.features, marked.features);
+  assert.deepEqual(opened.walk.fixes.map(f => [f.t, f.lat, f.lon, f.acc]), marked.fixes.map(f => [f.t, f.lat, f.lon, f.acc]));
+  assert.deepEqual(opened.walk.marks, marked.marks);
+  assert.deepEqual([...opened.photos.get('photos/f-1.jpg')], [...photo]);
+  const db = open(bytes);
+  try { assert.deepEqual(rows(db, 'SELECT surveyed_mark FROM features ORDER BY fid'), [['Benchmark'], [null]]); } finally { db.close(); }
+  // A GeoPackage from another tool has no walk record to trust.
+  const foreign = open(bytes); foreign.run('DROP TABLE walk_record'); const other = foreign.export(); foreign.close();
+  assert.throws(() => readGeoPackage(SQL, other), /not made by BrainSNN Walk/u);
+  assert.throws(() => readGeoPackage(SQL, new Uint8Array(200)), /not a GeoPackage/u);
+  const plain = new SQL.Database(); plain.run('CREATE TABLE t(x)'); const sqlite = plain.export(); plain.close();
+  assert.throws(() => readGeoPackage(SQL, sqlite), /not a GeoPackage/u);
 });

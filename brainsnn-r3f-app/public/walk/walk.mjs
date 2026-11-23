@@ -2,12 +2,12 @@
 // until the person exports, shares, or hands the video to World Builder.
 import {
   FEATURE_TYPES, LIMITS, bundleEntries, createTrackMeter, defaultWalkName, featureType, formatDuration, formatMetres, isFix,
-  makeFeature, measureBetween, placeFeatures, readBundle, summarizeTrack, toCSV, toGPX, toGeoJSON,
+  makeFeature, measureBetween, pinWalk, placeFeatures, positionStatement, readBundle, readMark, summarizeTrack, toCSV, toGPX, toGeoJSON,
 } from './walk-core.mjs';
 import { unzip, zipParts } from './walk-zip.mjs';
 import { askToKeepWalks, createWalkStore } from './walk-store.mjs';
 import { drawWalkMap, zoomAbout } from './walk-map.mjs';
-import { buildGeoPackage, loadSqlJs } from './walk-gpkg.mjs';
+import { buildGeoPackage, loadSqlJs, looksLikeGeoPackage, readGeoPackage } from './walk-gpkg.mjs';
 import { HANDOFF_MAX_BYTES, stageLocalCapture } from '../world/capture-handoff.mjs';
 
 const $ = id => document.getElementById(id);
@@ -305,7 +305,7 @@ async function videoBlob() {
 
 function drawMap() {
   if (!current) return;
-  mapApi = drawWalkMap($('map'), current.walk, view);
+  mapApi = drawWalkMap($('map'), pinWalk(current.walk).walk, { ...view, markedIds: new Set((current.walk.marks ?? []).map(m => m.featureId)) });
   const zoomed = view.zoom > 1.001;
   $('map').classList.toggle('zoomed', zoomed);
   $('map-fit').hidden = !zoomed;
@@ -313,6 +313,7 @@ function drawMap() {
 
 function setView(next) {
   Object.assign(view, next);
+  $('map-hint').hidden = true; // learned it; the hint stays out of the way from now on
   drawMap();
 }
 
@@ -325,9 +326,10 @@ function renderResults() {
   $('shared-badge').hidden = !readOnly;
   $('keep-copy').hidden = !readOnly;
   $('delete-walk').hidden = readOnly;
-  $('map-value').textContent = summary.map.metres === null ? 'Withheld' : `±${formatMetres(summary.map.metres)}`;
-  $('map-value').classList.toggle('muted', summary.map.metres === null);
-  $('map-note').textContent = summary.map.metres === null ? summary.map.reason : `Phone GPS · 95% of ${plural(summary.fixes, 'fix')} were within this`;
+  const statement = positionStatement(walk);
+  $('map-value').textContent = statement.metres !== null ? `±${formatMetres(statement.metres)}` : statement.basis === 'surveyed-mark' ? 'Unchecked' : 'Withheld';
+  $('map-value').classList.toggle('muted', statement.metres === null);
+  $('map-note').textContent = statement.note;
   const bits = [`${formatMetres(summary.lengthMetres)} walked`, formatDuration(summary.durationSeconds), plural(summary.fixes, 'GPS fix'), plural(summary.gaps, 'tracking gap')];
   if (summary.weakFixes) bits.push(`${plural(summary.weakFixes, 'weak fix')} left off the line`);
   $('stats').textContent = bits.join(' · ');
@@ -358,7 +360,8 @@ function renderFeatureList() {
     const title = document.createElement('b'); title.textContent = feature.label;
     const meta = document.createElement('span');
     const time = new Date(feature.t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    meta.textContent = [featureType(feature.type).label, time, Number.isFinite(feature.acc) ? `GPS ±${formatMetres(feature.acc)}` : 'no GPS position'].join(' · ');
+    const mark = (walk.marks ?? []).find(m => m.featureId === feature.id);
+    meta.textContent = [featureType(feature.type).label, time, Number.isFinite(feature.acc) ? `GPS ±${formatMetres(feature.acc)}` : 'no GPS position', mark ? `pinned to ${mark.name}` : ''].filter(Boolean).join(' · ');
     text.append(title, meta);
     head.append(dot, text);
     li.append(head);
@@ -375,11 +378,51 @@ function renderFeatureList() {
         form.innerHTML = '<label>Name<input name="label" maxlength="60"></label><label>Note<textarea name="note" maxlength="500" rows="2"></textarea></label><div class="row"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" data-remove="1">Remove feature</button></div>';
         form.elements.label.value = feature.label; form.elements.note.value = feature.note;
         detail.append(form);
+        detail.append(markForm(feature, mark));
       }
       li.append(detail);
     }
     return li;
   }));
+}
+
+// Pin a feature to a surveyed mark (monument, PK nail, benchmark): the whole walk moves onto the marks.
+function markForm(feature, mark) {
+  const box = document.createElement('fieldset');
+  box.className = 'mark-form'; box.dataset.markFor = feature.id;
+  const legend = document.createElement('legend'); legend.textContent = 'Surveyed mark';
+  box.append(legend);
+  if (!Number.isFinite(feature.lat)) {
+    const note = document.createElement('p'); note.textContent = 'This feature has no GPS position, so it cannot be pinned to a mark.';
+    box.append(note);
+    return box;
+  }
+  const help = document.createElement('p');
+  help.textContent = 'Dropped on a monument, PK nail or benchmark? Enter its surveyed position (WGS 84 decimal degrees). The whole walk moves onto your marks; with two or more, each is checked against the others.';
+  box.insertAdjacentHTML('beforeend', '<label>Latitude<input name="markLat" inputmode="decimal" autocomplete="off" placeholder="45.4215"></label><label>Longitude<input name="markLon" inputmode="decimal" autocomplete="off" placeholder="-75.6972"></label><label>Mark name<input name="markName" maxlength="60" autocomplete="off" placeholder="PK nail 3"></label><div class="row"><button class="btn primary" type="button" data-mark="save">Pin to this mark</button></div>');
+  box.insertBefore(help, box.querySelector('label'));
+  if (mark) {
+    box.querySelector('[name=markLat]').value = String(mark.lat);
+    box.querySelector('[name=markLon]').value = String(mark.lon);
+    box.querySelector('[name=markName]').value = mark.name;
+    box.querySelector('.row').insertAdjacentHTML('beforeend', '<button class="btn danger" type="button" data-mark="remove">Unpin</button>');
+  }
+  return box;
+}
+
+async function saveMark(featureId, box, remove = false) {
+  const walk = current.walk;
+  const others = (walk.marks ?? []).filter(m => m.featureId !== featureId);
+  if (remove) { walk.marks = others; await saveWalk(); renderResults(); say('result-status', 'Mark removed.'); return; }
+  const number = name => Number(String(box.querySelector(`[name=${name}]`).value).trim().replace(',', '.'));
+  try {
+    if (others.length >= LIMITS.marks) throw new Error(`A walk can hold up to ${LIMITS.marks} surveyed marks.`);
+    const mark = readMark({ featureId, lat: number('markLat'), lon: number('markLon'), name: box.querySelector('[name=markName]').value }, new Set(walk.features.map(f => f.id)));
+    walk.marks = [...others, mark];
+    await saveWalk(); renderResults();
+    const statement = positionStatement(walk);
+    say('result-status', `${mark.name} pinned. The walk moved ${formatMetres(statement.pin.shiftMetres)}.`);
+  } catch (error) { say('result-status', error.message, true); }
 }
 
 function selectFeature(id) {
@@ -492,8 +535,9 @@ async function openSharedFile(file) {
   say('list-status', 'Opening the shared walk…');
   try {
     if (file.size > LIMITS.bundleBytes) throw new Error(`Shared walks can be up to ${formatMb(LIMITS.bundleBytes)}.`);
-    const files = await unzip(new Uint8Array(await file.arrayBuffer()), { maxBytes: LIMITS.bundleBytes });
-    openShared(readBundle(files));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (looksLikeGeoPackage(bytes)) openShared(readGeoPackage(await loadSqlJs(), bytes));
+    else openShared(readBundle(await unzip(bytes, { maxBytes: LIMITS.bundleBytes })));
     say('list-status');
   } catch (error) {
     say('list-status', `Could not open it: ${error.message}`, true);
@@ -615,11 +659,14 @@ $('map-fit').addEventListener('click', () => setView({ zoom: 1, panX: 0, panY: 0
 $('feature-list').addEventListener('click', async event => {
   const select = event.target.closest('[data-select]');
   if (select) { selectFeature(select.dataset.select); return; }
+  const markButton = event.target.closest('[data-mark]');
+  if (markButton) { const box = markButton.closest('[data-mark-for]'); await saveMark(box.dataset.markFor, box, markButton.dataset.mark === 'remove'); return; }
   if (event.target.closest('[data-remove]')) {
     const id = event.target.closest('[data-edit]').dataset.edit;
     const feature = current.walk.features.find(f => f.id === id);
     if (!feature || !confirm(`Remove ${feature.label} from this walk?`)) return;
     current.walk.features = current.walk.features.filter(f => f.id !== id);
+    current.walk.marks = (current.walk.marks ?? []).filter(m => m.featureId !== id);
     if (feature.photo) { try { await store.deleteFile(current.walk.id, feature.photo); } catch {} }
     view.selectedId = null;
     await saveWalk(); renderResults();
