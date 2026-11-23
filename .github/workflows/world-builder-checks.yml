@@ -186,6 +186,22 @@ jobs:
       - name: Prepare the pinned browser physics engine for showroom trials
         working-directory: brainsnn-r3f-app
         run: node scripts/build-deformable.mjs --engine-only
+      - name: Registered survey and bounded depth worker contracts without model downloads
+        run: python -m pytest tests/world/test_bim_workbench_handoff.py tests/world/test_depth_sequence.py tests/world/test_depth_pro2_backend.py -q
+      - name: Robot capability physics, telemetry, arm checks and recorder lifecycle
+        timeout-minutes: 5
+        run: |
+          python tests/world/robot_capability_browser_smoke.py --out output/playwright/world/robot-capability
+          python tests/world/showroom_run_lifecycle_browser_smoke.py
+      - name: Source-bound depth sequence review and preview controls
+        timeout-minutes: 4
+        run: python tests/world/depth_workbench_browser_smoke.py
+      - name: Scan project queue, recovery and artifact handoff in the browser
+        timeout-minutes: 4
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/review-browsers
+          BIM_SMOKE_OUTPUT: output/playwright/world/bim-workbench
+        run: node tests/world/bim-workbench-browser-smoke.mjs
       - name: Feature showcase navigation and video playback
         run: python tests/world/world_showcase_browser_smoke.py
       # One studio bar for every tool; separate tool pages open in the workbench beside the world.

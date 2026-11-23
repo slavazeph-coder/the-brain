@@ -87,7 +87,7 @@ export function mountRobotSetup({host, robots, getState, actions}) {
     for (const card of host.querySelectorAll('[data-robot]')) card.setAttribute('aria-pressed', String(card.dataset.robot === s.robotId));
     for (const card of host.querySelectorAll('[data-world]')) card.setAttribute('aria-pressed', String(card.dataset.world === s.origin));
     host.dataset.origin = s.origin || '';
-    put(pickedRobot, ROBOT_WORDS[s.robotId]?.[0] || robots[s.robotId]?.name || 'Choose a robot');
+    put(pickedRobot, s.robotId==='custom'?s.robotName:ROBOT_WORDS[s.robotId]?.[0] || robots[s.robotId]?.name || 'Choose a robot');
     put(pickedWorld, WORLD_CHOICES.find(world => world.kind === s.origin)?.title || s.worldName || 'Choose a world');
     put(worldNote, s.origin === 'street' ? 'Now: the street block.' : s.origin === 'capture' ? 'Now: adding your photo or video.' : `Now: ${s.worldName || 'no map yet'}.`);
     const stopping = !!s.planning && s.origin !== 'street';

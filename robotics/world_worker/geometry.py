@@ -56,10 +56,14 @@ def load_arena_cloud(path: Path):
         value = json.loads(path.read_text(encoding='utf-8'), parse_constant=reject)
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError('Point-cloud hand-off is not valid JSON.') from error
-    if not isinstance(value, dict) or value.get('version') != 1 or value.get('kind') != 'colmap-sparse-point-cloud' \
-            or value.get('coordinateFrame') != 'right-handed-y-up' or value.get('sourceFrame') not in ['colmap', 'right-handed-y-up'] \
+    survey = isinstance(value, dict) and value.get('kind') == 'survey-scan-point-cloud' and value.get('sourceFrame') == 'survey-scan'
+    reconstruction = isinstance(value, dict) and value.get('kind') == 'colmap-sparse-point-cloud' and value.get('sourceFrame') in ['colmap', 'right-handed-y-up']
+    if not isinstance(value, dict) or value.get('version') != 1 or not (survey or reconstruction) \
+            or value.get('coordinateFrame') != 'right-handed-y-up' \
             or value.get('units') not in ['m', 'arbitrary']:
         raise ValueError('Not a BrainSNN Arena point-cloud hand-off.')
+    if survey and value.get('units') != 'm':
+        raise ValueError('A registered survey scan must declare metres; scan-file units remain unverified.')
     points = value.get('points')
     if not isinstance(points, list) or not 1 <= len(points) <= ARENA_CLOUD_MAX_POINTS:
         raise ValueError('The hand-off needs 1 to 50,000 points.')
@@ -81,10 +85,13 @@ def load_arena_cloud(path: Path):
         raise ValueError('The cloud spans an area larger than 250 × 250 m at 0.5 m cells. Check the scale or remove stray points.')
     scale, units = value.get('scale'), value['units']
     if units == 'm':
-        if not (isinstance(scale, dict) and scale.get('source') == 'user-measured' and _finite(scale.get('metresPerUnit'))
+        scale_source = 'scan-file' if survey else 'user-measured'
+        if not (isinstance(scale, dict) and scale.get('source') == scale_source and _finite(scale.get('metresPerUnit'))
                 and scale['metresPerUnit'] > 0 and scale.get('selfReported') is True and scale.get('verified') is False
                 and all(scale.get(k) is None or (_finite(scale[k]) and scale[k] > 0) for k in ['distance', 'spanUnits'])):
-            raise ValueError('A metric hand-off must carry its self-reported, unverified user-measured scale.')
+            raise ValueError(f'A metric hand-off must carry its self-reported, unverified {scale_source} scale.')
+        if survey and any(scale.get(k) is not None for k in ['distance', 'spanUnits']):
+            raise ValueError('Scan-file units must not impersonate a measured distance.')
         scale = {k: scale.get(k) for k in ['source', 'metresPerUnit', 'distance', 'spanUnits', 'selfReported', 'verified']}
     elif scale is not None:
         raise ValueError('A hand-off in arbitrary units cannot carry a scale.')
@@ -110,10 +117,10 @@ def load_arena_cloud(path: Path):
     if transform is not None and not (isinstance(transform, list) and len(transform) == 3 and all(
             isinstance(row, list) and len(row) == 4 and all(_finite(v) and abs(v) <= MAX_PREVIEW_COORDINATE for v in row) for row in transform)):
         raise ValueError('The hand-off transform must be a 3 x 4 matrix of finite numbers.')
-    cloud = {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
+    cloud = {'version': 1, 'kind': value['kind'], 'units': units, 'coordinateFrame': 'right-handed-y-up',
             'sourceFrame': value['sourceFrame'], 'source': source[:200] if isinstance(source, str) else 'browser hand-off',
             'points': points, 'floorEstimate': floor, 'scale': scale, 'provenance': {**provenance, 'metricVerified': False},
-            **({'multiView': True} if value.get('multiView') is True else {}),
+            **({'multiView': True} if not survey and value.get('multiView') is True else {}),
             **({'fromSource': transform} if transform is not None else {}),
             **({'nameObjects': True} if value.get('nameObjects') is True else {})}
     if 'measurementChecks' in value:

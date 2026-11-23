@@ -535,8 +535,9 @@ def handoff_input(request: dict):
     if not path.is_absolute() or path.is_symlink() or not path.is_file():
         raise ValueError('Adapter inputs must be regular local files.')
     cloud = load_arena_cloud(path)
-    # COLMAP clouds are multi-view by construction; any other frame must say so (World Builder sets it from camera poses).
-    if cloud['sourceFrame'] != 'colmap' and cloud.get('multiView') is not True:
+    # Registered survey scans have their own validated kind/frame/declared-scale contract.
+    # They are not mislabeled as camera reconstructions. Other frames require camera-derived multi-view evidence.
+    if cloud['sourceFrame'] not in ('colmap', 'survey-scan') and cloud.get('multiView') is not True:
         raise ValueError('The scene compiler needs a multi-view reconstruction; this hand-off does not come from one.')
     return cloud, {'kind': 'browser-handoff', 'name': str(inputs[0].get('name', ''))[:160],
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
