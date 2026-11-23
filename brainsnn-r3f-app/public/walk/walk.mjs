@@ -6,7 +6,8 @@ import {
 } from './walk-core.mjs';
 import { unzip, zipParts } from './walk-zip.mjs';
 import { askToKeepWalks, createWalkStore } from './walk-store.mjs';
-import { drawWalkMap } from './walk-map.mjs';
+import { drawWalkMap, zoomAbout } from './walk-map.mjs';
+import { buildGeoPackage, loadSqlJs } from './walk-gpkg.mjs';
 import { HANDOFF_MAX_BYTES, stageLocalCapture } from '../world/capture-handoff.mjs';
 
 const $ = id => document.getElementById(id);
@@ -19,7 +20,7 @@ let view = freshView();
 let mapApi = null;
 let installEvent = null;
 
-function freshView() { return { showTrack: true, showFeatures: true, showError: false, selectedId: null, measuring: false, measure: [] }; }
+function freshView() { return { showTrack: true, showFeatures: true, showError: false, selectedId: null, measuring: false, measure: [], zoom: 1, panX: 0, panY: 0 }; }
 function say(id, message = '', error = false) { const node = $(id); node.textContent = message; node.classList.toggle('error', !!error); }
 function url(blob) { const href = URL.createObjectURL(blob); objectUrls.add(href); return href; }
 function releaseUrls() { for (const href of objectUrls) URL.revokeObjectURL(href); objectUrls.clear(); }
@@ -305,6 +306,14 @@ async function videoBlob() {
 function drawMap() {
   if (!current) return;
   mapApi = drawWalkMap($('map'), current.walk, view);
+  const zoomed = view.zoom > 1.001;
+  $('map').classList.toggle('zoomed', zoomed);
+  $('map-fit').hidden = !zoomed;
+}
+
+function setView(next) {
+  Object.assign(view, next);
+  drawMap();
 }
 
 function renderResults() {
@@ -409,6 +418,21 @@ async function deliver(file) {
   return 'saved';
 }
 
+async function featurePhotos(walk) {
+  const photos = new Map();
+  for (const feature of walk.features) {
+    if (!feature.photo) continue;
+    const blob = await photoBlob(feature.photo);
+    if (blob) photos.set(feature.photo, new Uint8Array(await blob.arrayBuffer()));
+  }
+  return photos;
+}
+
+async function geoPackage(walk, photos) {
+  const SQL = await loadSqlJs();
+  return buildGeoPackage(SQL, walk, { photos });
+}
+
 async function exportAs(kind) {
   const { walk } = current;
   const base = slug(walk.name);
@@ -418,17 +442,15 @@ async function exportAs(kind) {
     if (kind === 'geojson') file = new File([JSON.stringify(toGeoJSON(walk), null, 1)], `${base}.geojson`, { type: 'application/geo+json' });
     else if (kind === 'gpx') file = new File([toGPX(walk)], `${base}.gpx`, { type: 'application/gpx+xml' });
     else if (kind === 'csv') file = new File([toCSV(walk)], `${base}-features.csv`, { type: 'text/csv' });
+    else if (kind === 'gpkg') file = new File([await geoPackage(walk, await featurePhotos(walk))], `${base}.gpkg`, { type: 'application/geopackage+sqlite3' });
     else {
-      const photos = new Map();
-      for (const feature of walk.features) {
-        if (!feature.photo) continue;
-        const blob = await photoBlob(feature.photo);
-        if (blob) photos.set(feature.photo, new Uint8Array(await blob.arrayBuffer()));
-      }
+      const photos = await featurePhotos(walk);
       const withVideo = $('include-video').checked && walk.video;
       const video = withVideo ? await videoBlob() : null;
       const exported = { ...walk, video: video ? walk.video : null };
-      const entries = bundleEntries(exported, { photos, video: video ? new Uint8Array(await video.arrayBuffer()) : null });
+      let gpkg = null;
+      try { gpkg = await geoPackage(exported, photos); } catch { /* the bundle still has GeoJSON, GPX and CSV */ }
+      const entries = bundleEntries(exported, { photos, gpkg, video: video ? new Uint8Array(await video.arrayBuffer()) : null });
       file = new File(zipParts(entries), `${base}.zip`, { type: 'application/zip' });
     }
     const outcome = await deliver(file);
@@ -536,11 +558,60 @@ $('measure').addEventListener('click', () => {
   say('measure-out', view.measuring ? 'Tap two features to measure between them.' : '');
   renderFeatureList(); drawMap();
 });
-$('map').addEventListener('click', event => {
-  if (!mapApi) return;
-  const box = event.currentTarget.getBoundingClientRect();
-  selectFeature(mapApi.hit(event.clientX - box.left, event.clientY - box.top));
+// Map gestures: one finger drags (once zoomed in), two fingers pinch, the wheel zooms, a tap selects,
+// and a double tap fits the whole walk again. At normal size a vertical drag still scrolls the page.
+const touches = new Map();
+let gestureMoved = false, lastTap = 0;
+const centreOffset = (canvas, x, y) => ({ sx: x - canvas.clientWidth / 2, sy: y - canvas.clientHeight / 2 });
+const local = (canvas, event) => { const box = canvas.getBoundingClientRect(); return { x: event.clientX - box.left, y: event.clientY - box.top }; };
+$('map').addEventListener('pointerdown', event => {
+  const canvas = event.currentTarget;
+  touches.set(event.pointerId, local(canvas, event));
+  if (touches.size === 1) gestureMoved = false;
+  try { canvas.setPointerCapture(event.pointerId); } catch {}
 });
+$('map').addEventListener('pointermove', event => {
+  const canvas = event.currentTarget;
+  const previous = touches.get(event.pointerId);
+  if (!previous) return;
+  const now = local(canvas, event);
+  if (touches.size === 1) {
+    const dx = now.x - previous.x, dy = now.y - previous.y;
+    if (Math.hypot(dx, dy) > 0.5) {
+      if (view.zoom > 1.001 || gestureMoved) { gestureMoved = true; setView({ panX: view.panX + dx, panY: view.panY + dy }); }
+      else if (Math.hypot(dx, dy) > 6) gestureMoved = true;
+    }
+  } else if (touches.size === 2) {
+    const [a, b] = [...touches.entries()].map(([id, p]) => id === event.pointerId ? now : p);
+    const [pa, pb] = [...touches.values()];
+    const before = Math.hypot(pa.x - pb.x, pa.y - pb.y), after = Math.hypot(a.x - b.x, a.y - b.y);
+    const mid = centreOffset(canvas, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    const oldMid = centreOffset(canvas, (pa.x + pb.x) / 2, (pa.y + pb.y) / 2);
+    gestureMoved = true;
+    const zoomed = before > 4 ? zoomAbout(view, after / before, mid.sx, mid.sy) : view;
+    setView({ ...zoomed, panX: zoomed.panX + (mid.sx - oldMid.sx), panY: zoomed.panY + (mid.sy - oldMid.sy) });
+  }
+  touches.set(event.pointerId, now);
+});
+const endTouch = event => {
+  const canvas = event.currentTarget;
+  const point = touches.get(event.pointerId);
+  touches.delete(event.pointerId);
+  if (event.type !== 'pointerup' || touches.size || gestureMoved || !point || !mapApi) return;
+  const now = Date.now();
+  if (now - lastTap < 300) { lastTap = 0; setView({ zoom: 1, panX: 0, panY: 0 }); return; }
+  lastTap = now;
+  selectFeature(mapApi.hit(point.x, point.y));
+};
+for (const type of ['pointerup', 'pointercancel']) $('map').addEventListener(type, endTouch);
+$('map').addEventListener('wheel', event => {
+  event.preventDefault();
+  const canvas = event.currentTarget;
+  const { x, y } = local(canvas, event);
+  const { sx, sy } = centreOffset(canvas, x, y);
+  setView(zoomAbout(view, Math.exp(-event.deltaY * 0.0015), sx, sy));
+}, { passive: false });
+$('map-fit').addEventListener('click', () => setView({ zoom: 1, panX: 0, panY: 0 }));
 $('feature-list').addEventListener('click', async event => {
   const select = event.target.closest('[data-select]');
   if (select) { selectFeature(select.dataset.select); return; }

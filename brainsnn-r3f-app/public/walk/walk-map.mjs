@@ -8,7 +8,7 @@ const niceLength = metres => {
   return [1, 2, 5, 10].map(n => n * power).filter(n => n <= metres).at(-1) ?? power;
 };
 
-export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = true, showError = false, selectedId = null, measure = [], dpr = globalThis.devicePixelRatio || 1 } = {}) {
+export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = true, showError = false, selectedId = null, measure = [], zoom = 1, panX = 0, panY = 0, dpr = globalThis.devicePixelRatio || 1 } = {}) {
   // Never draw into a collapsed canvas: a hidden or still-laying-out canvas reports 0 or a few px.
   const width = Math.max(160, canvas.clientWidth || 360), height = Math.max(160, canvas.clientHeight || 320);
   canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
@@ -35,12 +35,13 @@ export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = tru
   // A tiny or stationary walk still shows at least 20 m, so GPS jitter is not blown up to fill the screen.
   const span = Math.max(20, maxX - minX, maxY - minY);
   const pad = 36;
-  const fit = Math.min((width - 2 * pad) / Math.max(20, maxX - minX), (height - 2 * pad) / Math.max(20, maxY - minY));
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  // Fit the whole walk, then apply the person's zoom and pan (screen pixels from the fitted centre).
+  const fit = zoom * Math.min((width - 2 * pad) / Math.max(20, maxX - minX), (height - 2 * pad) / Math.max(20, maxY - minY));
+  const cx = (minX + maxX) / 2 - panX / fit, cy = (minY + maxY) / 2 + panY / fit;
   const toScreen = p => ({ x: width / 2 + (p.x - cx) * fit, y: height / 2 - (p.y - cy) * fit });
 
   // Grid at a round number of metres.
-  const step = niceLength(span / 4);
+  const step = niceLength(span / 4 / zoom);
   g.strokeStyle = 'rgba(255,255,255,0.06)'; g.lineWidth = 1;
   const left = cx - width / 2 / fit, right = cx + width / 2 / fit, bottom = cy - height / 2 / fit, top = cy + height / 2 / fit;
   g.beginPath();
@@ -113,3 +114,13 @@ export function drawWalkMap(canvas, walk, { showTrack = true, showFeatures = tru
 }
 
 export const hasPositions = walk => (walk.fixes ?? []).some(isFix) || (walk.features ?? []).some(f => Number.isFinite(f.lat));
+
+export const MAP_ZOOM = Object.freeze({ min: 1, max: 40 });
+
+/** Zoom about a screen point (relative to the canvas centre) so the spot under the fingers stays put. */
+export function zoomAbout(view, factor, sx, sy) {
+  const zoom = Math.min(MAP_ZOOM.max, Math.max(MAP_ZOOM.min, view.zoom * factor));
+  const k = zoom / view.zoom;
+  if (zoom === MAP_ZOOM.min) return { zoom, panX: 0, panY: 0 };
+  return { zoom, panX: sx - (sx - view.panX) * k, panY: sy - (sy - view.panY) * k };
+}

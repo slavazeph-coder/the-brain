@@ -83,12 +83,14 @@
   <p id="shared-badge" class="badge" hidden>Shared walk · read only</p>
   <div class="viewer">
     <canvas id="map" role="img" aria-label="Map of the walk"></canvas>
+    <p class="map-hint">Pinch or scroll to zoom · drag to move · double-tap to fit</p>
   </div>
   <div class="chips" role="group" aria-label="Show on the map">
     <button class="chip" type="button" data-layer="showTrack" aria-pressed="true">Track</button>
     <button class="chip" type="button" data-layer="showFeatures" aria-pressed="true">Features</button>
     <button class="chip" type="button" data-layer="showError" aria-pressed="false">GPS error</button>
     <button id="measure" class="chip" type="button" aria-pressed="false">Measure</button>
+    <button id="map-fit" class="chip" type="button" hidden>Fit walk</button>
   </div>
   <p id="measure-out" class="measure-out" role="status" aria-live="polite"></p>
   <div class="cards">
@@ -121,7 +123,8 @@
 <dialog id="export-sheet" class="sheet" aria-labelledby="export-title">
   <form method="dialog">
     <h2 id="export-title">Export this walk</h2>
-    <button class="btn primary" type="button" data-export="bundle">Walk bundle (.zip)<small>Everything: GeoJSON, GPX, spreadsheet, photos</small></button>
+    <button class="btn primary" type="button" data-export="gpkg">GeoPackage (.gpkg)<small>Track and features with photos · QGIS, ArcGIS Pro</small></button>
+    <button class="btn secondary" type="button" data-export="bundle">Walk bundle (.zip)<small>Everything: GeoPackage, GeoJSON, GPX, spreadsheet, photos</small></button>
     <label id="include-video-row" class="check"><input id="include-video" type="checkbox"> <span id="include-video-label">Include the video</span></label>
     <button class="btn secondary" type="button" data-export="geojson">GeoJSON<small>QGIS, ArcGIS, geojson.io</small></button>
     <button class="btn secondary" type="button" data-export="gpx">GPX<small>Google Earth, hiking and GPS apps</small></button>

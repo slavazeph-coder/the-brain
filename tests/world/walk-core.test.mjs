@@ -198,7 +198,8 @@ test('the walk app ships as an installable, offline shell', async () => {
   assert.equal(app.scope, '/walk/');
   assert.equal(app.display, 'standalone');
   assert.match(page, /<link rel="manifest" href="\.\/manifest\.webmanifest">/u);
-  for (const file of ['./walk.mjs', './walk-core.mjs', './walk-zip.mjs', './walk-store.mjs', './walk-map.mjs', './walk.css', '../world/capture-handoff.mjs'])
+  for (const file of ['./walk.mjs', './walk-core.mjs', './walk-zip.mjs', './walk-store.mjs', './walk-map.mjs', './walk-gpkg.mjs', './walk.css',
+    './vendor/sql-wasm.js', './vendor/sql-wasm.wasm', '../world/capture-handoff.mjs'])
     assert.ok(shell.includes(`'${file}'`), `${file} is precached`);
   assert.match(shell, /const CACHE = 'brainsnn-walk-v\d+'/u);
 });

@@ -1,8 +1,9 @@
 // Offline shell for BrainSNN Walk. Walks themselves live in IndexedDB, never here.
 // Bump CACHE whenever SHELL changes so phones drop the old copy.
-const CACHE = 'brainsnn-walk-v1';
+const CACHE = 'brainsnn-walk-v2';
 const SHELL = [
   './', './index.html', './walk.mjs', './walk-core.mjs', './walk-zip.mjs', './walk-store.mjs', './walk-map.mjs', './walk.css',
+  './walk-gpkg.mjs', './vendor/sql-wasm.js', './vendor/sql-wasm.wasm',
   './manifest.webmanifest', '../world/capture-handoff.mjs',
   '../world/icons/mark.svg', '../world/icons/icon-192.png', '../world/icons/apple-touch-icon.png',
 ];

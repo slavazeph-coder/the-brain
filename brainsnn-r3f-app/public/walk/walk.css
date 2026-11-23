@@ -88,7 +88,11 @@ body[data-screen="capture"] main { max-width: 720px; padding-top: env(safe-area-
 .rename .btn { width: auto; }
 .badge { justify-self: start; display: inline-block; margin: 0 0 10px; padding: 4px 12px; border-radius: 999px; background: rgba(143, 200, 255, 0.14); color: var(--link); font-weight: 700; font-size: 14px; }
 .viewer { margin: 0 calc(-1 * var(--gutter)); }
-.viewer canvas { display: block; width: 100%; height: min(58dvh, 440px); touch-action: manipulation; cursor: pointer; }
+.viewer { position: relative; }
+.viewer canvas { display: block; width: 100%; height: min(54dvh, 440px); touch-action: pan-y; cursor: grab; }
+.viewer canvas.zoomed { touch-action: none; }
+.map-hint { position: absolute; left: 10px; top: 8px; max-width: calc(100% - 70px); margin: 0; padding: 2px 8px; border-radius: 8px; background: rgba(11,13,21,.78); color: var(--muted); font-size: 13px; pointer-events: none; }
+@media (max-width: 380px) { .map-hint { display: none; } }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 .chip { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
 .chip[aria-pressed="true"] { background: rgba(255, 163, 26, 0.16); border-color: var(--accent); color: var(--text); }

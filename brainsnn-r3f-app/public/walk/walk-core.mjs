@@ -265,7 +265,8 @@ export function readmeText(walk) {
     summary.map.metres === null ? `Map position: withheld. ${summary.map.reason}` : `Map position: ±${summary.map.metres} m, phone GPS. 95% of the walk's fixes reported this radius or better.`,
     'Shape accuracy: not measured. A phone camera walk does not measure shapes or distances by itself.',
     '',
-    'Files: walk.geojson and walk.gpx open in QGIS, ArcGIS and most map apps. features.csv opens in a spreadsheet.',
+    'Files: walk.gpkg (GeoPackage: track and features with their photos) opens in QGIS and ArcGIS Pro.',
+    'walk.geojson and walk.gpx open in most map apps. features.csv opens in a spreadsheet.',
     'photos/ holds one photo per feature. walk.json reopens the walk in BrainSNN Walk (brainsnn.com/walk).',
     '',
   ].join('\n');
@@ -314,9 +315,10 @@ export function readWalkRecord(value) {
 }
 
 /** The files of a walk bundle, in order, as {name, data} where data is a string or a byte array. */
-export function bundleEntries(walk, { photos = new Map(), video = null } = {}) {
+export function bundleEntries(walk, { photos = new Map(), video = null, gpkg = null } = {}) {
   const entries = [
     { name: 'walk.json', data: JSON.stringify(walkRecord(walk), null, 1) },
+    ...(gpkg ? [{ name: 'walk.gpkg', data: gpkg }] : []),
     { name: 'walk.geojson', data: JSON.stringify(toGeoJSON(walk)) },
     { name: 'walk.gpx', data: toGPX(walk) },
     { name: 'features.csv', data: toCSV(walk) },

@@ -8,10 +8,12 @@ GPS refused, hand the video to World Builder, and hold the layout at 320 and 390
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from functools import partial
 import json
 import os
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 from threading import Thread
 import zipfile
@@ -26,6 +28,19 @@ START = {'latitude': 45.4215, 'longitude': -75.6972}
 
 def at(metres_north: float, accuracy: float = 5.0):
     return {'latitude': START['latitude'] + metres_north * M, 'longitude': START['longitude'], 'accuracy': accuracy}
+
+
+def check_geopackage(path: Path, *, features: int, photos: int):
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute('PRAGMA application_id').fetchone()[0] == 0x47504B47
+        assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+        layers = db.execute('SELECT table_name, geometry_type_name, srs_id FROM gpkg_geometry_columns ORDER BY table_name').fetchall()
+        assert layers == [('features', 'POINT', 4326), ('track', 'LINESTRING', 4326)], layers
+        assert db.execute('SELECT COUNT(*) FROM features').fetchone()[0] == features
+        assert db.execute('SELECT COUNT(*) FROM features WHERE photo_jpeg IS NOT NULL').fetchone()[0] == photos
+        assert db.execute('SELECT map_position_95_m FROM track').fetchone()[0] == 5
+        blob = db.execute('SELECT geom FROM features WHERE geom IS NOT NULL LIMIT 1').fetchone()[0]
+        assert blob[:2] == b'GP' and int.from_bytes(blob[4:8], 'little') == 4326
 
 
 def no_overflow(page, label):
@@ -100,6 +115,12 @@ def verify_browser(browser_type, url, output: Path):
         expect(page.locator('#feature-list > li')).to_have_count(4)
         expect(page.locator('#feature-list')).to_contain_text('GPS ±5 m')
         expect(page.locator('#build-3d')).to_be_enabled() if camera else expect(page.locator('#build-3d')).to_be_disabled()
+        # Zoom with the wheel, then fit the whole walk again.
+        page.locator('#map').hover()
+        page.mouse.wheel(0, -600)
+        expect(page.locator('#map-fit')).to_be_visible()
+        page.locator('#map-fit').click()
+        expect(page.locator('#map-fit')).to_be_hidden()
         page.locator('[data-layer="showError"]').click()
         page.locator('[data-select]').first.click()
         if camera:
@@ -124,6 +145,13 @@ def verify_browser(browser_type, url, output: Path):
         assert geo['type'] == 'FeatureCollection' and geo['features'][0]['geometry']['type'] == 'LineString'
         assert [f['properties']['type'] for f in geo['features'][1:]] == ['pole', 'drain', 'hazard', 'sign']
         assert geo['features'][0]['properties']['map_position_95_m'] == 5
+        # GeoPackage: the walk's own SQLite file, the format QGIS and ArcGIS Pro open directly.
+        page.locator('#export').click()
+        with page.expect_download() as download:
+            page.locator('[data-export="gpkg"]').click()
+        gpkg = output / f'walk-{name}.gpkg'
+        download.value.save_as(gpkg)
+        check_geopackage(gpkg, features=4, photos=4 if camera else 0)
         page.locator('#export').click()
         if camera:
             page.locator('#include-video').check()
@@ -134,7 +162,7 @@ def verify_browser(browser_type, url, output: Path):
         with zipfile.ZipFile(bundle) as archive:
             names = archive.namelist()
             assert archive.testzip() is None
-        assert names[:5] == ['walk.json', 'walk.geojson', 'walk.gpx', 'features.csv', 'README.txt'], names
+        assert names[:6] == ['walk.json', 'walk.gpkg', 'walk.geojson', 'walk.gpx', 'features.csv', 'README.txt'], names
         if camera:
             assert sum(n.startswith('photos/') for n in names) == 4 and any(n.startswith('video.') for n in names), names
 

@@ -33,7 +33,12 @@ but still count toward the map-position figure. Measuring between two features r
 
 ## Exports
 
-- **Walk bundle (.zip)**: `walk.json` (`brainsnn.walk.v1`), `walk.geojson`, `walk.gpx`, `features.csv`,
+- **GeoPackage (.gpkg)**, the default. One SQLite file (OGC GeoPackage 1.4, EPSG:4326). The `track` layer is a
+  LineString with the walk's figures. The `features` layer is Points with type, label, note, time, 95% accuracy,
+  heading and video time, plus `photo` (file name) and `photo_jpeg` (the JPEG bytes). A feature without a fix has
+  an empty geometry. The file is written in the browser by `walk-gpkg.mjs` with sql.js 1.13.0, vendored in `vendor/`
+  and loaded on first export. GDAL 3.9 opens both layers; see `tests/world/walk-gpkg.test.mjs`.
+- **Walk bundle (.zip)**: also contains `walk.gpkg`, `walk.json` (`brainsnn.walk.v1`), `walk.geojson`, `walk.gpx`, `features.csv`,
   `README.txt`, `photos/*.jpg`, and optionally `video.mp4`/`video.webm`. The ZIP is stored (uncompressed)
   and written by `walk-zip.mjs`.
 - GeoJSON, GPX and CSV individually. CSV cells that start with `= + - @` are prefixed with `'` so a shared
@@ -45,6 +50,11 @@ On phones with the Web Share API the file goes to the share sheet. Otherwise it 
 encryption, ZIP64, checksum mismatches and entries that inflate past their declared size. It accepts
 deflated entries where the browser has `DecompressionStream`. **Keep a copy on this phone** turns a shared
 walk into an editable local one.
+
+## Map
+
+North-up, in local metres. Pinch or scroll to zoom (up to 40×), and drag to move once zoomed in. Double-tap or press
+**Fit walk** to see the whole walk again. At normal size, a vertical drag still scrolls the page on phones.
 
 ## Build the 3D world
 
@@ -72,6 +82,6 @@ This button stages the walk's video through the existing same-origin handoff
 - **LiDAR, ARKit tracking and on-device Gaussian splats.** iPhone Safari gives web pages no LiDAR depth or
   AR tracking, so these need a native iOS capture app. Such an app would also produce the existing
   `brainsnn.capture.v1` bundle (see `world-native-capture.md`).
-- GeoPackage, COPC and orthophoto exports.
+- COPC point clouds and orthophotos (these need LiDAR or a reconstruction).
 - Survey-control pins.
 - A basemap. The map draws in local metres with a scale bar and north arrow, and no tiles are fetched.
