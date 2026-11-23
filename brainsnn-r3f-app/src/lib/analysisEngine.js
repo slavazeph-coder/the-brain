@@ -3,19 +3,19 @@ import { splitIntoSegments } from './validation.js';
 
 const TRUST_TERMS = /\b(proof|because|data|tested|customer|source|case study|measured|transparent|specific|example|evidence|verified|clear)\b/gi;
 const URGENCY_TERMS = /\b(now|today|deadline|limited|last chance|before it'?s too late|only|urgent|immediately|act fast)\b/gi;
-const FEAR_TERMS = /\b(risk|danger|lose|fail|threat|mistake|panic|scared|crisis|damage|betray|hidden truth)\b/gi;
+const FEAR_TERMS = /\b(risk|danger|lose|losing|fail|threat|mistake|panic|scared|crisis|damage|betray|hidden truth)\b/gi;
 const ANGER_TERMS = /\b(outrage|furious|disgusting|betrayed|enemy|fight|rigged|corrupt|they don't want)\b/gi;
 const EMPATHY_TERMS = /\b(you|your|together|help|support|understand|simple|clear|feel|people|customers|team)\b/gi;
 const CURIOSITY_TERMS = /\b(what if|why|how|secret|surprising|learn|discover|before|after|mistake|lesson)\b/gi;
 const SPECIFIC_TERMS = /\b(\d+(?:[.,:]\d+)?%?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|seconds?|minutes?|hours?|days?|weeks?|months?)\b/gi;
 const LIMITATION_TERMS = /\b(do not know|don'?t know|not yet|uncertain|directional|rather than|caveat|limitation|approximately|estimated|remaining|unchanged|treat .{0,12} as)\b/gi;
 const COERCED_SPECIFIC_TERMS = /\b(?:within|in|for|after|before|next|only|just|last)\s+(?:the\s+)?(?:next\s+)?\d+(?:[.,:]\d+)?\s*(?:seconds?|minutes?|hours?|days?|weeks?|months?)?|\b\d+\s*(?:seconds?|minutes?|hours?|days?)\s+(?:or|before|left|remaining)\b/gi;
-const VAGUE_TERMS = /\b(game[- ]changer|revolutionary|world[- ]class|best|ultimate|massive|unprecedented|guaranteed|viral|explode)\b/gi;
+const VAGUE_TERMS = /\b(game[- ]changer|revolutionary|world[- ]class|best|ultimate|massive|unprecedented|guaranteed|guarantees?(?=\s+(?:\d|results?\b|growth\b|success\b|sales\b|revenue\b))|viral|explode)\b/gi;
 
 const CTA_PATTERN = /\b(book|buy|reply|call|click|start|try|test|scan|compare|approve|apply|download|subscribe|sign up|schedule|send|share|publish|learn more|get started)\b/i;
 const CLAIM_PATTERN = /\b(will|can|helps?|increase|reduce|save|grow|double|triple|improve|faster|cheaper|better|best|convert|generate|make|turn|guarantee|guaranteed)\b/i;
 const OUTCOME_PATTERN = /\b(result|outcome|revenue|conversion|saved|reduced|increased|decreased|faster|cheaper|accuracy|time|cost|roi|roas|ctr|cpc|cpa|profit|sales|leads?)\b/i;
-const VAGUE_PATTERN = /\b(game[- ]changer|revolutionary|world[- ]class|best|ultimate|massive|unprecedented|guaranteed|viral|explode)\b/i;
+const VAGUE_PATTERN = /\b(game[- ]changer|revolutionary|world[- ]class|best|ultimate|massive|unprecedented|guaranteed|guarantees?(?=\s+(?:\d|results?\b|growth\b|success\b|sales\b|revenue\b))|viral|explode)\b/i;
 const URGENCY_PATTERN = /\b(now|today|deadline|limited|last chance|before it'?s too late|urgent|immediately|act fast)\b/i;
 const PROOF_PATTERN = /(\$\s?\d|\b\d+(?:\.\d+)?%|\b\d{2,}\b|customer|client|tested|measured|case study|benchmark|source|data|pilot|revenue|conversion|roas|ctr|cpc|cpa)/i;
 
@@ -141,6 +141,8 @@ function textRecommendations(rawContent, segments, evidenceHits, trust, urgencyH
       `${quote(claimLine)} carries the promise, but the scan found no checkable evidence attached to it.`,
       `Add a number, source, customer result, test condition, or explicit limitation directly beside ${quote(claimLine)}.`,
     ));
+  } else if (proofLine && ctaLine && proofLine !== ctaLine && segments.indexOf(proofLine) === segments.indexOf(ctaLine) - 1) {
+    // The proof already arrives right before the ask; recommending the move would be a no-op.
   } else if (proofLine && ctaLine && proofLine !== ctaLine) {
     recs.push(recommendation(
       'move-proof-to-ask',
@@ -287,7 +289,10 @@ export function analyzeContentLocally({ content, contentType = 'text', forceFall
     ? multimodalRecommendations(multimodalPacket)
     : textRecommendations(rawContent, segments, evidenceHits, trust, urgencyHits);
   const firstRecommendation = recommendations[0];
-  const strongestSegment = heatmap.slice().sort((a, b) => b.score - a.score)[0];
+  // "What works" must not praise a line this same scan flags as pressure or an unsupported claim.
+  const PRESSURE_CATEGORIES = new Set(['Forced urgency', 'Fear pressure', 'Vague claim']);
+  const strongestSegment = heatmap.filter((segment) => !PRESSURE_CATEGORIES.has(segment.category)).sort((a, b) => b.score - a.score)[0];
+  const pressureLed = heatmap.length > 0 && !strongestSegment;
 
   const summary = multimodalPacket
     ? multimodalPacket.workflow.length
@@ -336,7 +341,9 @@ export function analyzeContentLocally({ content, contentType = 'text', forceFall
             : `${multimodalPacket.transitionCount} visual transition(s) give you concrete timestamps to inspect.`
           : strongestSegment
             ? `${quote(strongestSegment.text)} is the strongest attention signal in this scan.`
-            : 'The message has a usable core.',
+            : pressureLed
+              ? 'Every line earns attention through pressure or unsupported claims; none works on its own yet.'
+              : 'The message has a usable core.',
       },
       {
         label: 'What hurts',

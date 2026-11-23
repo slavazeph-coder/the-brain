@@ -3,7 +3,7 @@ import { legacyRedirect } from './legacyRoutes.js';
 
 describe('public route migration', () => {
   it('preserves attribution and input queries while selecting the appropriate Review tab', () => {
-    expect(legacyRedirect('/app/', '?src=old-link')).toBe('/office?src=old-link&tab=passage');
+    expect(legacyRedirect('/engine', '?src=old-link')).toBe('/office?src=old-link&tab=drafts');
     expect(legacyRedirect('/engine', '?tab=bad')).toBe('/office?tab=drafts');
     expect(legacyRedirect('/reconstruct')).toBe('/office?tab=claims');
   });
@@ -20,5 +20,8 @@ describe('public route migration', () => {
   });
   it('never redirects API paths or already canonical destinations', () => {
     for (const path of ['/api/missions', '/office', '/arena/tasks/build', '/play', '/evidence']) expect(legacyRedirect(path)).toBe(null);
+  });
+  it('serves the Creative Engine at /app instead of sending it to Review', () => {
+    for (const path of ['/app', '/app/', '/app/improve', '/app/research']) expect(legacyRedirect(path, '?checkout=success')).toBe(null);
   });
 });

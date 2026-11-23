@@ -27,7 +27,6 @@ const REVIEW_TABS = {
 };
 
 const LEGACY_ROUTES = {
-  '/app': { path: '/office', tab: 'passage' },
   '/engine': { path: '/office', tab: 'drafts' },
   '/reconstruct': { path: '/office', tab: 'claims' },
   '/missions': { path: '/arena/' },
@@ -58,6 +57,30 @@ const WORLD = {
     'Single-photo depth and generative previews do not establish metric scale or hidden geometry. Review independent measurements, obstacles and unknown areas before planning.',
     'Robot routes and operating-cost estimates use the reviewed map and your assumptions. They are planning previews, not physical robot execution or safety certification.',
   ],
+};
+
+// The Creative Engine at /app (restored Nov 2026): the server-backed scan and its sections.
+const ANALYZER = {
+  title: 'BrainSNN | Creative Engine',
+  description: 'Scan a draft for attention, trust and pressure signals, improve it, compare two versions and keep a history. Scores are heuristic signals, not a measurement of anyone’s brain.',
+  heading: 'Know how a draft lands before you publish it.',
+  body: [
+    'Paste a post, ad, email or script. The Creative Engine scores attention, trust and pressure, shows which words drive each score, and suggests the next fix. Improve applies fixes you choose; Compare scores two versions side by side.',
+    'Results include the cognitive firewall, affect and the 39 Hz soliton field from the 103-layer stack, with each layer’s inputs on the page. History and approvals stay in this browser.',
+    'Scores are heuristic review signals from text features. They are not a measurement of a reader’s brain and do not predict reach, sales or behaviour.',
+  ],
+  links: [{ path: '/app/compare', label: 'Compare two drafts' }, { path: '/app/research', label: 'Research layers' }, { path: '/office', label: 'Review' }],
+};
+
+const AGENT_LAB = {
+  title: 'Agent Lab | BrainSNN',
+  description: 'How BrainSNN analyzes, improves and tests agent work: the engine, its evidence, recorded work and a replay of real events.',
+  heading: 'An evidence engine for agent work.',
+  body: [
+    'Agent Lab shows the BrainSNN workflow for agent work: analyze a task, improve the draft, test it, and keep the evidence.',
+    'Recorded work and the replay come from the live summary when it is available. When it is not, the page says so instead of showing sample numbers as real.',
+  ],
+  links: [{ path: '/app', label: 'Creative Engine' }, { path: '/evidence', label: 'Evidence' }],
 };
 
 // The homepage: three doors (Walk, World Builder, API). Unknown paths fall back to it.
@@ -233,6 +256,8 @@ const ROUTES = [
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
     ],
   },
+  { path: '/app', ...ANALYZER },
+  { path: '/agent-lab', ...AGENT_LAB },
   { path: '/world', ...WORLD },
   { path: '/', ...HOME },
 ];
@@ -326,8 +351,10 @@ export function renderContentBlock(meta, currentPath = '/') {
     : '';
   const overflow = '<details><summary>More</summary><ul>' + renderLinks([
     ...(primary === CRAWL_LINKS ? [] : CRAWL_LINKS),
+    { path: '/app', label: 'Creative Engine' },
     { path: '/office', label: 'Review' },
     { path: '/evidence', label: 'Evidence' },
+    { path: '/agent-lab', label: 'Agent Lab' },
     { path: '/lab', label: 'Lab' },
   ]) + '</ul></details>';
 

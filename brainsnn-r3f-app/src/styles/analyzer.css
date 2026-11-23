@@ -1,0 +1,13 @@
+/* The restored Creative Engine shell at /app. Layout and panels come from utilities.css. */
+.analyzer-skip { position: absolute; left: 12px; top: -60px; z-index: 60; padding: 10px 16px; border-radius: 999px; background: var(--bsn-cyan); color: #04060a; font-weight: 700; }
+.analyzer-skip:focus { top: 12px; }
+
+.desktop-sidebar .sidebar-site-link { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 10px; border-radius: 10px; color: var(--bsn-text-muted, #a7b0c0); font-size: .85rem; text-decoration: none; }
+.desktop-sidebar .sidebar-site-link:hover { color: #fff; background: rgba(255, 255, 255, .05); }
+.desktop-sidebar .sidebar-site-link:focus-visible { outline: 2px solid var(--bsn-cyan); outline-offset: 2px; }
+.desktop-sidebar.collapsed .sidebar-site-link { justify-content: center; }
+
+.analyzer-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 24px 0; padding: 12px 16px; border: 1px solid rgba(0, 245, 255, .3); border-radius: 12px; background: rgba(0, 245, 255, .07); color: #e6f9ff; font-size: .9rem; }
+.analyzer-notice-success { border-color: rgba(52, 211, 153, .45); background: rgba(52, 211, 153, .1); }
+.analyzer-notice button { margin-left: auto; padding: 6px 12px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: .8rem; cursor: pointer; }
+@media (max-width: 760px) { .analyzer-notice { margin: 12px 12px 0; } }

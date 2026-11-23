@@ -19,6 +19,8 @@ const HoldoutEvidencePage = React.lazy(() => import('../features/research/Holdou
 const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx').then(m => ({ default: m.PowderLabPage })));
 const FoolTheDetector = React.lazy(() => import('../features/toys/fool/FoolTheDetector.jsx').then(m => ({ default: m.FoolTheDetector })));
 const DraftDuel = React.lazy(() => import('../features/toys/duel/DraftDuel.jsx').then(m => ({ default: m.DraftDuel })));
+const AnalyzerApp = React.lazy(() => import('./AnalyzerApp.jsx').then(m => ({ default: m.AnalyzerApp })));
+const AgentLabHome = React.lazy(() => import('../features/agent-lab/AgentLabHome.jsx').then(m => ({ default: m.AgentLabHome })));
 const DefendTheBrainToy = React.lazy(() => import('../features/toys/defend/DefendTheBrainToy.jsx').then(m => ({ default: m.DefendTheBrainToy })));
 
 export function resolveRoute(pathname) {
@@ -36,6 +38,8 @@ export function resolveRoute(pathname) {
   if (path === '/play') return 'play';
   if (path === '/coherence') return 'coherence';
   if (path === '/scan') return 'scan';
+  if (path === '/app' || path.startsWith('/app/')) return 'app';
+  if (path === '/agent-lab') return 'agent-lab';
   if (path === '/') return 'home';
   return 'missing';
 }
@@ -79,6 +83,9 @@ export function AppShell() {
     window.scrollTo(0, 0);
   }
   function navigate(id) { window.location.assign(getNavItem(id).href); }
+  // The Creative Engine and Agent Lab bring their own chrome, palette and shortcuts.
+  if (route === 'app') return <React.Suspense fallback={<div className="brain-app" role="status">Loading the Creative Engine…</div>}><AnalyzerApp /></React.Suspense>;
+  if (route === 'agent-lab') return <React.Suspense fallback={<div className="bh-site" role="status">Loading Agent Lab…</div>}><AgentLabHome /></React.Suspense>;
   let content;
   // App.tsx serves the three-door homepage at `/` and World Builder at `/world`; the shell's home is the classic robot-testing lobby (`/?classic=1`).
   if (route === 'home') content = <LobbyHome />;

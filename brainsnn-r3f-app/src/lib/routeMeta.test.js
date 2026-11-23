@@ -116,8 +116,18 @@ describe('per-route social previews', () => {
     expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/office"');
   });
 
+  it('gives the restored Creative Engine and Agent Lab their own pages with limits', () => {
+    const app = resolveRouteMeta('/app');
+    expect(app.title).toBe('BrainSNN | Creative Engine');
+    expect(app.body.join(' ')).toContain('not a measurement of a reader’s brain');
+    expect(resolveRouteMeta('/app/improve').title).toBe(app.title);
+    expect(resolveRouteMeta('/app/improve').canonicalPath).toBe('/app/improve');
+    expect(resolveRouteMeta('/agent-lab').title).toBe('Agent Lab | BrainSNN');
+    expect(renderContentBlock(app, '/app')).toContain('href="/app/compare"');
+  });
+
   it('resolves the former workbenches to the matching Review tabs', () => {
-    for (const [path, tab] of [['/app', 'passage'], ['/engine', 'drafts'], ['/reconstruct', 'claims']]) {
+    for (const [path, tab] of [['/engine', 'drafts'], ['/reconstruct', 'claims']]) {
       const legacy = resolveRouteMeta(path);
       expect(legacy).toEqual(resolveRouteMeta('/office', `?tab=${tab}`));
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
@@ -235,7 +245,7 @@ describe('content a crawler can read without running JavaScript', () => {
   });
 
   it('gives every major route a heading and real prose', () => {
-    for (const path of ['/', '/world', '/scan', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
+    for (const path of ['/', '/world', '/scan', '/office', '/arcade', '/lab', '/app', '/app/compare', '/agent-lab', '/engine', '/evidence', '/reconstruct']) {
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
       const heading = tagContent(html, '<h1[^>]*>([^<]*)</h1>');
       expect(heading.length).toBeGreaterThan(10);
@@ -261,8 +271,8 @@ describe('content a crawler can read without running JavaScript', () => {
     expect(html).toContain('href="/play"');
     expect(html).not.toContain('href="/lab"');
     const home = applyRouteMeta(HTML, '/', '', 'https://x.test');
-    for (const path of ['/arena/', '/office', '/evidence', '/lab']) expect(home).toContain(`href="${path}"`);
-    for (const path of ['/play', '/arcade', '/app', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
+    for (const path of ['/arena/', '/office', '/evidence', '/lab', '/app', '/agent-lab']) expect(home).toContain(`href="${path}"`);
+    for (const path of ['/play', '/arcade', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
     expect(home).toContain('<details><summary>More</summary>');
     for (const path of ['/walk/', '/world/', '/world/api.html']) expect(home).toContain(`href="${path}"`);
     const world = applyRouteMeta(HTML, '/world', '', 'https://x.test');

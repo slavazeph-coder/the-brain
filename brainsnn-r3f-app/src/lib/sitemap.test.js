@@ -21,10 +21,10 @@ describe('buildSitemap', () => {
 
   it('lists canonical destinations rather than retired product routes', () => {
     const xml = buildSitemap(ORIGIN);
-    for (const path of ['/arena/', '/office', '/evidence', '/lab', '/lab/powder', '/play']) {
+    for (const path of ['/arena/', '/office', '/evidence', '/lab', '/lab/powder', '/play', '/app', '/agent-lab']) {
       expect(xml).toContain(`<loc>${ORIGIN}${path}</loc>`);
     }
-    for (const path of ['/app', '/engine', '/reconstruct', '/missions']) {
+    for (const path of ['/engine', '/reconstruct', '/missions']) {
       expect(xml).not.toContain(`<loc>${ORIGIN}${path}</loc>`);
     }
   });

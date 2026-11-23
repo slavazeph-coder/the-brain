@@ -47,3 +47,18 @@ Request counts, not visitors. They include bots, CI live-verify curls and my own
 | `/api/world/v1/status` | 14 (mine) | `/api/affect` | 1 |
 
 Zero requests: `/api/neural/analyze`, `/api/soliton/explore`, `/api/leads`, `/api/billing/checkout`, `/api/agent-lab/summary` and `/api/engines/status`.
+
+## Owner correction, Nov 23: "not old product if it's a functional layer, fix the layers"
+
+Do not propose deleting BrainSNN layers. The zero-traffic APIs were **disconnected**, not unused. Commit 06262617
+(Oct 16) dropped `/app` and the analyzer shell from the router.
+
+What was restored:
+- `/app` is the Creative Engine (`AnalyzerApp.jsx`) and `/agent-lab` is Agent Lab.
+- The pressure fixes in `draftPatch.js` and `analysisEngine.js`, with tests in `src/lib/pressureFixes.test.js`.
+- `/api/*` now returns a JSON 404.
+- The CI guard `tests/world/layers_browser_smoke.py`.
+
+Production config, from `/api/engines/status`: Gemini and the GPU worker are configured; Stripe and Supabase are not.
+Production runs the app `railway.toml` with the preloads (brand-brain, missions and sponsorship are live). The repo-root
+`railway.toml` lacks those preloads; it is misleading but unused.

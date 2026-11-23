@@ -97,7 +97,7 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
 
   return (
     <div className="results-workbench" data-testid="results-workspace">
-      <main className="results-main" aria-label="Brain Scan results">
+      <section className="results-main" aria-label="Brain Scan results">
         {isVideoReadout ? (
           <>
             <CreativeNeuralReadout
@@ -140,7 +140,7 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
           <SolitonFieldPanel result={result} />
           <TechnicalDetails result={result} onOpenResearch={onOpenResearch || (() => {})} />
         </TabPanel>
-      </main>
+      </section>
       <aside className={`results-inspector${isVideoReadout ? ' results-inspector-video' : ''}`} aria-label="Recommended next actions">
         {isVideoReadout ? (
           <>

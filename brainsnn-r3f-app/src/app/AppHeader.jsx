@@ -1,10 +1,10 @@
 import React from 'react';
 import { Command, Download } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
-import { getNavItem } from './navigation.js';
+import { analyzerItem } from '../features/analyzer/analyzerNavigation.js';
 
 export function AppHeader({ active, onOpenCommand, onExport, hasResult }) {
-  const item = getNavItem(active);
+  const item = analyzerItem(active);
   return (
     <header className="app-header app-header-compact">
       <div>

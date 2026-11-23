@@ -8,6 +8,7 @@ import {
   eventStatusLabel, formatCount, formatRecordTime,
 } from './agentLabModel.js';
 import { useLabSummary } from './useLabSummary.js';
+import { track } from '../../lib/analytics.js';
 import './agent-lab.css';
 
 const CAPABILITIES = [
@@ -201,7 +202,7 @@ function Replay({ events, recorded }) {
 
 export function AgentLabHome() {
   const { summary, loading, refresh } = useLabSummary();
-  useEffect(() => { document.title = LAB_TITLE; }, []);
+  useEffect(() => { document.title = LAB_TITLE; track('agent_lab_viewed'); }, []);
   return <div className="al-site"><a className="al-skip-link" href="#al-main">Skip to content</a>
     <header className="al-header"><Brand /><nav aria-label="Main navigation"><a href="#capabilities">The engine</a><a href="/evidence">Benchmark</a><a href="#roadmap">What’s next</a><a href="#office">The office</a></nav><a className="al-header-cta" href="/app">Open BrainSNN <ArrowUpRight size={15} aria-hidden="true" /></a></header>
     <main id="al-main">
