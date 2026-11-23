@@ -119,7 +119,7 @@ def check_studio(browser):
     errors, posts = [], []
     page.on("pageerror", lambda err: errors.append(str(err)))
     page.on("request", lambda req: posts.append(req.url) if req.method == "POST" else None)
-    page.goto(SITE + "/", wait_until="domcontentloaded")
+    page.goto(SITE + "/world/", wait_until="domcontentloaded")
     frame = page.frame_locator('iframe[title^="BrainSNN World Builder"]')
     frame.locator('#tab-world').click()
     obj = frame.locator('#object-name')

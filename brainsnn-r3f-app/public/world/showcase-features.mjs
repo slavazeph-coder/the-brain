@@ -394,3 +394,20 @@ export const chapters = [
     ],
   },
 ];
+
+/**
+ * The tools each chapter panel shows first; the rest sit behind "More tools" in that panel, and
+ * Find a tool always searches all of them. Two per chapter, a dozen in all. These picks are a
+ * product judgement, not measured usage: change them here.
+ */
+export const coreTools = {
+  robot: ['Run a practice route', 'Change the map'],
+  capture: ['Add photos or a walkthrough', 'Build 3D from overlapping views'],
+  scan: ['Pick and move objects', 'Inspect points, splats or meshes'],
+  building: ['Make a building model', 'Compare a model with its source'],
+  motion: ['Watch a moving 3D scene', 'Review human movement in video'],
+  share: ['Find your results', 'Save a map and its route evidence'],
+};
+for (const chapter of chapters) {
+  for (const feature of chapter.features) feature.core = coreTools[chapter.id]?.includes(feature.label) === true;
+}

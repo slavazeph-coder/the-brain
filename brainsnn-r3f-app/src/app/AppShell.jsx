@@ -80,7 +80,7 @@ export function AppShell() {
   }
   function navigate(id) { window.location.assign(getNavItem(id).href); }
   let content;
-  // App.tsx serves World Builder at `/`; the shell's home is the classic robot-testing lobby (`/?classic=1`).
+  // App.tsx serves the three-door homepage at `/` and World Builder at `/world`; the shell's home is the classic robot-testing lobby (`/?classic=1`).
   if (route === 'home') content = <LobbyHome />;
   else if (route === 'scan') content = <WorldScan />;
   else if (route === 'coherence') content = <CoherenceLanding onNavigate={navigate} onStart={openReview} />;

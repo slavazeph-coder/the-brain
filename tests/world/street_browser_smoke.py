@@ -124,7 +124,7 @@ def check_integrated(browser, mobile=False):
     context.on("request", lambda request: uploads.append(request.url) if request.method == "POST" and ("/api/world/" in request.url or "/v1/" in request.url) else None)
     page, detail = view, {}
     try:
-        page = open_world(view, ORIGIN.rstrip("/") + "/", require_response=True)
+        page = open_world(view, ORIGIN.rstrip("/") + "/world/", require_response=True)
         assert page is not view, "The street entry must work inside the existing home shell"
         if not page.locator('#world-examples').evaluate('el => el.open'):
             page.locator('#world-examples > summary').click()
@@ -213,7 +213,7 @@ def check_pending_switch_and_link(browser):
     view.on("pageerror", lambda error: errors.append(str(error)))
     page = view
     try:
-        page = open_world(view, ORIGIN.rstrip("/") + "/", require_response=True)
+        page = open_world(view, ORIGIN.rstrip("/") + "/world/", require_response=True)
         # Synchronous DOM events deliberately finish on Capture before the lazy
         # renderer import can resolve. They use the real product event handlers.
         page.evaluate("""() => {

@@ -65,6 +65,8 @@ const allowedEvents = new Set([
   'coherence_demo_played',
   'behaviour_home_viewed',
   'lobby_home_viewed',
+  'front_door_viewed',
+  'front_door_opened',
   'world_engine_home_viewed',
   'world_engine_scan_cta_clicked',
   'world_industry_opened',

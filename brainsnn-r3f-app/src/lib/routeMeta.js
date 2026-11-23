@@ -60,6 +60,24 @@ const WORLD = {
   ],
 };
 
+// The homepage: three doors (Walk, World Builder, API). Unknown paths fall back to it.
+const HOME = {
+  positioning: 'walk-world-api-v1',
+  title: 'BrainSNN | Walk a space, build its world, test a robot',
+  description: 'Map a space with your phone in BrainSNN Walk, open it as an editable 3D world in World Builder, or call the same pipeline through the API.',
+  heading: 'Map a space. Build its world. Test a robot in it.',
+  body: [
+    'Walk: walk a space with your phone and tap features as you pass them. Export GeoPackage, GPX or CSV. Map position comes from the phone’s own GPS accuracy; shapes and distances are not measured.',
+    'World Builder: turn a walk video, photos or a scan into an editable 3D world, move objects and try a robot route. Scale stays unverified until you check a known length, and robot routes are planning previews, not physical robot execution.',
+    'API: send captures to the reconstruction worker from your own code, then fetch jobs and artifacts, with limits and usage per key. Access is by pilot key.',
+  ],
+  primaryLinks: [
+    { path: '/walk/', label: 'Walk' },
+    { path: '/world/', label: 'World Builder' },
+    { path: '/world/api.html', label: 'API' },
+  ],
+};
+
 /** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
 const ROUTES = [
   { path: '/coherence', title: 'Video research preview | BrainSNN', heading: 'Inspect the correction pass.', description: 'Inspect a synthetic video correction fixture, published baselines and failed native-resolution quality gates.', body: ['Fixed post-process engine v0.4, with no trained weights. The low-resolution synthetic example does not establish HD or general video quality.', 'Native motion gates failed. Multi-minute coherence remains unestablished.'] },
@@ -216,7 +234,7 @@ const ROUTES = [
     ],
   },
   { path: '/world', ...WORLD },
-  { path: '/', ...WORLD },
+  { path: '/', ...HOME },
 ];
 
 const CRAWL_LINKS = Object.freeze([
@@ -298,15 +316,16 @@ export function renderContentBlock(meta, currentPath = '/') {
     .map((link) => `<li style="margin:0 0 .5rem"><a href="${escapeAttribute(link.path)}" style="color:#7dd3fc">${escapeAttribute(link.label)}</a></li>`)
     .join('');
   const playground = meta.positioning === WORLD.positioning;
-  const links = renderLinks(playground ? [
+  const primary = meta.primaryLinks || (playground ? [
     { path: '/world/index.html', label: 'Open the playground' },
     { path: '/world/index.html#showcase', label: 'Watch the walkthrough' },
   ] : CRAWL_LINKS);
+  const links = renderLinks(primary);
   const experiments = meta.links
     ? `<section aria-label="Lab experiments"><ul>${renderLinks(meta.links)}</ul></section>`
     : '';
   const overflow = '<details><summary>More</summary><ul>' + renderLinks([
-    ...(playground ? CRAWL_LINKS : []),
+    ...(primary === CRAWL_LINKS ? [] : CRAWL_LINKS),
     { path: '/office', label: 'Review' },
     { path: '/evidence', label: 'Evidence' },
     { path: '/lab', label: 'Lab' },

@@ -55,8 +55,25 @@ describe('per-route social previews', () => {
     expect(play.body.join(' ')).toContain('not a recording of anyone’s brain');
   });
 
-  it('publishes World Builder for the root and world routes with source limitations', () => {
-    for (const path of ['/', '/world', '/world/']) {
+  it('publishes the three doors at the root with each door\'s limitation', () => {
+    const home = resolveRouteMeta('/');
+    expect(home.title).toContain('BrainSNN');
+    expect(home.heading).toBe('Map a space. Build its world. Test a robot in it.');
+    expect(home.positioning).toBe('walk-world-api-v1');
+    expect(home.body.join(' ')).toContain('shapes and distances are not measured');
+    expect(home.body.join(' ')).toContain('not physical robot execution');
+    expect(home.body.join(' ')).toContain('Access is by pilot key');
+    const block = renderContentBlock(home, '/');
+    for (const href of ['/walk/', '/world/', '/world/api.html', '/arena/', '/office', '/lab']) {
+      expect(block).toContain(`href="${href}"`);
+    }
+    expect(resolveRouteMeta('/').canonicalPath).toBe('/');
+    // A path nobody claimed still gets the homepage copy, under its own canonical URL.
+    expect(resolveRouteMeta('/not-a-page').positioning).toBe('walk-world-api-v1');
+  });
+
+  it('publishes World Builder at /world with source limitations', () => {
+    for (const path of ['/world', '/world/']) {
       const world = resolveRouteMeta(path);
       expect(world.title).toBe('BrainSNN | World Builder');
       expect(world.heading).toBe('World Builder Playground');
@@ -68,7 +85,8 @@ describe('per-route social previews', () => {
     expect(resolveRouteMeta('/world/').canonicalPath).toBe('/world');
     expect(resolveRouteMeta('/', '?classic=1').canonicalPath).toBe('/?classic=1');
     expect(resolveRouteMeta('/world', '?classic=1').title).toBe('BrainSNN | World Builder');
-    expect(applyRouteMeta(HTML, '/')).toContain('name="brainsnn-positioning" content="world-builder-v1"');
+    expect(applyRouteMeta(HTML, '/world')).toContain('name="brainsnn-positioning" content="world-builder-v1"');
+    expect(applyRouteMeta(HTML, '/')).toContain('name="brainsnn-positioning" content="walk-world-api-v1"');
     expect(applyRouteMeta(HTML, '/', '?classic=1')).toContain('name="brainsnn-positioning" content="robot-pricing-transparent-v1"');
   });
 
@@ -246,8 +264,10 @@ describe('content a crawler can read without running JavaScript', () => {
     for (const path of ['/arena/', '/office', '/evidence', '/lab']) expect(home).toContain(`href="${path}"`);
     for (const path of ['/play', '/arcade', '/app', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
     expect(home).toContain('<details><summary>More</summary>');
-    expect(home).toContain('href="/world/index.html"');
-    expect(home).toContain('href="/world/index.html#showcase"');
+    for (const path of ['/walk/', '/world/', '/world/api.html']) expect(home).toContain(`href="${path}"`);
+    const world = applyRouteMeta(HTML, '/world', '', 'https://x.test');
+    expect(world).toContain('href="/world/index.html"');
+    expect(world).toContain('href="/world/index.html#showcase"');
   });
 
   it('escapes prose rather than trusting it to be tag-free', () => {
@@ -270,7 +290,8 @@ describe('static application metadata', () => {
   it('brands the initial document as BrainSNN and gives structured data the served route description', () => {
     const template = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
     expect(template).not.toContain('Sapient Playground');
-    expect(template).toContain('<title>BrainSNN | World Builder</title>');
+    expect(template).toContain(`<title>${resolveRouteMeta('/').title}</title>`);
+    expect(template).toContain(`content="${resolveRouteMeta('/').description}"`);
     const html = applyRouteMeta(template, '/office', '?tab=video', 'https://www.brainsnn.com');
     const structured = JSON.parse(html.match(/<script id="site-schema" type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
     expect(structured.name).toBe('BrainSNN');
