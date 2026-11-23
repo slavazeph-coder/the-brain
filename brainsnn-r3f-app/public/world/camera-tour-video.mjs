@@ -2,7 +2,7 @@
 import { validateCameraPath, sampleCameraPath, cameraPathReceipt } from './camera-path.mjs';
 import { pickMime } from './share-video.mjs';
 
-export const CAMERA_TOUR_VIDEO = Object.freeze({width:1280,height:720,fps:30,maxBytes:64*1024**2,bitrate:6_000_000});
+export const CAMERA_TOUR_VIDEO = Object.freeze({width:1280,height:720,fps:30,maxBytes:64*1024**2,bitrate:6_000_000,maxFrameStep:.25,minSteps:12});
 
 const labels = Object.freeze({
   unknown:'Origin unknown',
@@ -138,12 +138,17 @@ async function recordWithType({path,viewer,onProgress,signal,type:preferredType}
       rejectFrames=reject;
       try{
         paint(0);recorder.start(250);started=true;start=performance.now();
-        watchdog=setTimeout(()=>fail(Error('Recording timed out. Keep this tab visible and try a shorter tour.')),Math.min(90_000,(duration+10)*1000));
+        watchdog=setTimeout(()=>fail(Error('Recording timed out. Keep this tab visible and try a shorter tour.')),Math.min(120_000,(duration*2+20)*1000));
+        // A stalled main thread (a page still loading, a slow phone) must slow the tour, not skip it:
+        // jumping from the first view to the last in one frame leaves the encoder almost nothing to
+        // encode, and some browsers then emit an empty file. Each frame advances real time, capped.
+        const maxStep=Math.max(CAMERA_TOUR_VIDEO.maxFrameStep,duration/CAMERA_TOUR_VIDEO.minSteps);
+        let t=0,last=start;
         const frame=now=>{
           if(finished)return;
           try{
             if(signal?.aborted){abort();return;}
-            const t=Math.min(duration,Math.max(0,(now-start)/1000));
+            t=Math.min(duration,t+Math.min(maxStep,Math.max(0,(now-last)/1000)));last=now;
             paint(t);onProgress?.(t/duration);
             if(t>=duration){elapsed=(performance.now()-start)/1000;resolve();}
             else raf=requestAnimationFrame(frame);

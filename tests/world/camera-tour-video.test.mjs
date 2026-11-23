@@ -38,7 +38,7 @@ async function withRecorder(options,run) {
     document:{value:doc,configurable:true},MediaRecorder:{value:FakeRecorder,configurable:true},
     performance:{value:{now:()=>clock},configurable:true},
     requestAnimationFrame:{value:fn=>{
-      const id=setTimeout(()=>{pending.delete(id);clock+=250;tick++;options.beforeFrame?.({source,doc,viewer,recorder,tick});fn(clock);},0);
+      const id=setTimeout(()=>{pending.delete(id);clock+=options.frameMs?options.frameMs(tick):250;tick++;options.beforeFrame?.({source,doc,viewer,recorder,tick});fn(clock);},0);
       pending.add(id);return id;
     },configurable:true},
     cancelAnimationFrame:{value:id=>{clearTimeout(id);pending.delete(id);},configurable:true},
@@ -154,5 +154,29 @@ test('an empty recording with no other container to try still fails honestly',as
   });
   await withRecorder({supported:['video/webm'],empty:true},async env=>{
     await assert.rejects(recordCameraTour({path:path(),viewer:env.viewer}),/empty video/);
+  });
+});
+
+test('a stalled page slows the tour instead of skipping from the first view to the last',async()=>{
+  // CI and slow phones can block the main thread for seconds right after recording starts. Before, the
+  // first frame after the stall jumped to the end of the path and the encoder got two frames (and some
+  // browsers then emitted an empty file). Now one frame advances at most max(0.25 s, duration / 12).
+  const long=createCameraPath({source:{name:'authored-renderer-fixture.ply',bytes:17,sha256:'a'.repeat(64)},provenance:'authored',keyframes:[
+    {time:0,eye:[0,1,3],target:[0,0,0],fov:60},
+    {time:3,eye:[1,1,3],target:[0,0,0],fov:30},
+  ]});
+  await withRecorder({frameMs:tick=>tick===0?10_000:250},async env=>{
+    const result=await recordCameraTour({path:long,viewer:env.viewer});
+    assert.ok(result.blob.size>0);
+    const fovs=env.views.slice(0,-1).map(view=>view.fov);
+    assert.ok(fovs.length>=13,`at least 12 path frames after the first paint, got ${fovs.length - 1}`);
+    for(let i=1;i<fovs.length;i++)assert.ok(fovs[i-1]-fovs[i]<=2.5+1e-9,'no frame skips more than a quarter second of the path');
+    assert.equal(fovs.at(-1),30,'the tour still reaches its last view');
+    assert.equal(result.receipt.recording.elapsedSeconds,10+11*.25,'elapsed time stays honest wall-clock time');
+  });
+  // A normal frame rate is unchanged: two 0.25 s frames cover a 0.5 s path.
+  await withRecorder({},async env=>{
+    const result=await recordCameraTour({path:path(),viewer:env.viewer});
+    assert.equal(result.receipt.recording.elapsedSeconds,.5);
   });
 });

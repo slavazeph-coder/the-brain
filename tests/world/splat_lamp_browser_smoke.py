@@ -258,6 +258,13 @@ def verify_embedded(page, origin, output, engine):
     frame = page.frame_locator('#scan-workshop-frame')
     lamp = frame.locator(LAMP)
     expect(frame.locator('#viewer-status')).to_contain_text('Reading room ready')
+    # The workshop frame shares the World page's main thread. Record once the page has finished starting
+    # up, as a person would; the recorder itself now slows rather than skips through a stall.
+    page.wait_for_load_state('load')
+    page.evaluate('''() => new Promise(resolve => {
+      const idle = window.requestIdleCallback || (callback => setTimeout(callback, 250));
+      idle(() => resolve(), {timeout: 10000});
+    })''')
     verify_suspended_tour(page, frame, scan_tab, output, engine)
     lamp.locator('summary').tap()
     toggle = lamp.locator('[data-lamp-enabled]')
