@@ -91,7 +91,7 @@ def main():
                 page.wait_for_function("document.querySelector('#status').textContent.startsWith('Reconstruction loaded.')", timeout=240000)
                 assert page.locator('#visual-canvas').is_visible()
                 assert page.locator('#run').is_disabled()
-                assert page.locator('#provenance').inner_text() == 'VISUAL / SCALE UNVERIFIED'
+                assert page.locator('#provenance').text_content() == 'VISUAL / SCALE UNVERIFIED'
                 page.locator('#viewport').screenshot(path=str(output / 'browser-api-reconstruction.png'))
                 # Verify the actual binary download, not merely a download event.
                 with page.expect_download() as event:
@@ -112,7 +112,7 @@ def main():
                 page.locator('[data-action=propose-map]').click()
                 page.wait_for_function("/Map proposed from \\d+ camera poses/.test(document.querySelector('#status').textContent)")
                 proposal_status = page.locator('#status').inner_text()
-                assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+                assert page.locator('#provenance').text_content() == 'REVIEW REQUIRED'
                 page.locator('#run').click()
                 page.wait_for_timeout(200)
                 assert 'Confirm independently measured scale' in page.locator('#status').inner_text()

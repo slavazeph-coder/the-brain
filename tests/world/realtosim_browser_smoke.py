@@ -96,7 +96,7 @@ def check(browser, url, ply, evidence, mobile=False):
     page.locator('#camera-height').fill('1.35')
     page.locator('[data-action=propose-map]').click()
     page.wait_for_function("/Map proposed from 40 camera poses/.test(document.querySelector('#status').textContent)")
-    assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+    assert page.locator('#provenance').text_content() == 'REVIEW REQUIRED'
     assert 'reconstruction-proposal' in page.locator('#panel').inner_text()
     assert not page.locator('#scale-reviewed').is_checked() and not page.locator('#map-reviewed').is_checked()
     # Before planning, the map asks its own open questions (at most three); the scale one leads to the measuring step.
@@ -235,7 +235,7 @@ def calibrate(page, mobile, label):
     page.locator('#measured-distance').fill(f'{span / K:.4f}')
     page.locator('[data-action=propose-measured]').click()
     page.wait_for_function("/at your measured .* m scale/.test(document.querySelector('#status').textContent)")
-    assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+    assert page.locator('#provenance').text_content() == 'REVIEW REQUIRED'
     assert 'self-reported' in page.locator('#panel').inner_text()
     assert not page.locator('#scale-reviewed').is_checked()
     page.locator('[data-tab=evidence]').click()

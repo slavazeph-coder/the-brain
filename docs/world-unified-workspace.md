@@ -38,7 +38,33 @@ Shared links such as `https://www.brainsnn.com/world/#pancake-lab` and
 The outer shell forwards its recognized public fragments. Changes to the
 fragment navigate within the initialized editor so edits in the scene survive.
 
-`studio.mjs` and `studio.css` are part of the offline shell. Checks:
+### Missions
+
+The robot loop is also a game. **Missions** sits beside Your world in the studio
+bar: a star ring, the level and the star count. Seven missions (11 stars) are
+scored only from what happened in this browser, through the playground's own
+event log (`event()` in `app.mjs` now also dispatches `world:event`):
+
+| Mission | Trigger | Stars |
+|---|---|---|
+| First run | `plan_completed` | 1 |
+| Robot garage | routes with 2 / 3 / 5 robots | 1–3 |
+| Shortcut | `what_if_rerouted`: 0.5 / 2 / 4 m shorter after a reviewed edit | 1–3 |
+| Pick the spot | `goal_routed` | 1 |
+| Street explorer | `sandbox_selected` with the street | 1 |
+| Before and after | `scenario_forked` | 1 |
+| Your own space | `source_added` | 1 |
+
+Each route shows a score card on the map. "Let it try" is a coverage pass, so it
+reports floor covered (m²) and the path length, not a "shortest" score. Spot
+routes keep the shortest so far per robot and map. Stars and levels (Rookie,
+Explorer, Builder, Expert, Master) earn a toast and, with motion allowed, a short
+confetti burst. Sound is optional and off by default. The toast, confetti and
+card never take pointer events. Every route stays labelled as simulated.
+Progress is a per-browser convenience in `localStorage`
+(`brainsnn-world-missions-v1`), validated on read and resettable from the board.
+
+`studio.mjs`, `studio.css` and `missions.mjs` are part of the offline shell. Checks:
 `tests/world/studio.test.mjs` (registry coverage, safe workbench targets,
 search, markup order, 13 px floor) and `tests/world/studio_browser_smoke.py`
 (every chapter, search, in-page tools, workbench pages, retained map edit,

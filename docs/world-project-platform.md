@@ -391,3 +391,36 @@ The release needs a paid field pilot using a real capture, independently checked
 The storage extension supplies owner-scoped large originals, resumable transfers, hash checks, private retrieval, and source-to-revision links. Remaining operational work includes a selected-provider rollout, monitored cleanup and backup/restore exercises, an explicit policy for erasing retained evidence, and measured transfer/verification cost. Range downloads, a fully packaged streaming archive, and direct large-worker-output handoff remain future work; the processing worker retains its separate temporary storage policy.
 
 The next developer improvements should follow actual partner use: a pinned example with a supported engine, schema compatibility tests, controlled job cancellation/recovery, reliable webhook or polling behavior, and one downstream integration that the chosen OEM supports. Scope a public self-service account/billing system after the private workflow produces repeat usage.
+
+## Monthly usage meter
+
+`/api/world/v1/usage` now includes `billing`: this workspace's metered usage for
+the current calendar month (UTC), stored in `brainsnn_world_usage_monthly`
+(kept, unlike the 24-hour rate buckets). Metrics: `api_requests` (every
+authenticated, rate-counted request), `processing_jobs_started` (worker accepted a
+start; idempotent replays are not counted again), `processing_upload_bytes`
+(accepted upload chunks) and `processing_artifact_bytes` (fully downloaded
+artifacts). A failed meter write never fails the customer's request.
+
+Export one month for invoicing with `npm run world:projects:usage -- --month YYYY-MM`
+(CSV: tenant, name, month, metrics). Counts start when the meter is deployed. This
+is metering for manual invoicing, not a payment system or entitlement.
+
+## Bootstrap a workspace without a database shell
+
+Production PostgreSQL is only reachable on the hosting network. To create a pilot
+or first-customer workspace without running the admin script there, generate a
+`bsk_` key privately (43 base64url characters after the prefix), keep it, and
+set only its SHA-256 on the website service:
+
+```
+WORLD_PROJECT_BOOTSTRAP_JSON={"tenant_id":"pilot-owner","tenant_name":"BrainSNN pilot",
+  "actor_name":"Owner pilot","role":"admin","key_sha256":"<64 hex>","expires_at":"<ISO, within 366 days>"}
+```
+
+On first use of the API the service creates the workspace, the named principal
+and the key (`created_by: operator-bootstrap`, audit event `key.bootstrapped`).
+A digest that already exists is left alone, so restarts change nothing; an
+existing workspace is never renamed. Invalid or expired values are skipped with a
+bounded warning and never stop the API. Pair it with a dedicated worker tenant
+(`world-project-worker-tenant.mjs`) under the same `tenant_id` to enable processing.

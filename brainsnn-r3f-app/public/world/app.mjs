@@ -8,6 +8,7 @@ import {SYSTEMS} from './catalog.mjs';
 import {mountShowcase} from './showcase.mjs';
 import {chapters as studioChapters} from './showcase-features.mjs';
 import {createWorkbench,isWorkbenchPage,mountStudioBar} from './studio.mjs';
+import {mountMissions} from './missions.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
 import {fromDepth,parseVisualAsset,toPLY,toArenaCloud,STRIDE} from './visual-geometry.mjs';
 import {decodePhoto,inferDepth} from './depth-client.mjs';
@@ -120,7 +121,9 @@ window.addEventListener('pagehide',()=>projectSnapshotHandoff?.());
 function getVisualViewer(){if(!visualViewer)visualViewer=createVisualViewer($('visual-canvas'));return visualViewer;}
 try{renderer=createRenderer($('world-canvas'));renderer.setRobot(robot);}catch(e){status(e.message,true);}
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();robotSetup?.refresh();}
-function event(type,detail){events.push({time:new Date().toISOString(),type,detail});events=events.slice(-200);}
+function event(type,detail){events.push({time:new Date().toISOString(),type,detail});events=events.slice(-200);
+  // Missions and other page features listen to the same log; the log itself (and proof exports) is unchanged.
+  try{document.dispatchEvent(new CustomEvent('world:event',{detail:{type,detail,robotId,map:world?.name||null,origin:worldOrigin,area:type==='plan_completed'&&Number.isFinite(result?.reachableArea)?result.reachableArea:null}}));}catch{/* the log still records */}}
 const observations=createObservationReview({getSources:()=>sources,status,event});
 const measurements=createMeasurementReview({getWorld:()=>world,status,event,download});
 function stopReplay(){cancelAnimationFrame(replayFrame);replayFrame=null;$('replay').textContent='Replay';}
@@ -353,7 +356,7 @@ async function addFiles(list,{nativeCapture=false}={}){
 async function run(){if(planning){invalidate();status('Planning cancelled.');return;}const gate=planningGate(world);if(gate){status(gate,true);setTab('world');return;}
   invalidate();planning=true;update();const id=epoch;try{planner=new Worker('./planner-worker.mjs',{type:'module'});}catch(e){planning=false;update();status('A browser planning worker could not start. Check your browser settings.',true);return;}
   const timeout=setTimeout(()=>{if(id===epoch){invalidate();status('Planning timed out. Try a smaller map.',true);}},15000);
-  planner.onmessage=({data})=>{clearTimeout(timeout);if(data.id!==epoch)return;planner?.terminate();planner=null;planning=false;if(data.error){runIssue={message:data.error,advice:data.advice||null};status(data.error,true);update();return;}result=data.result;renderer?.setResult(result);renderer?.setCursor(.015);event('plan_completed',{algorithm:result.algorithm,metres:result.distance,policyExecuted:false});setTab('test');update();status('Planning preview complete. No learned policy or physical robot executed.');};
+  planner.onmessage=({data})=>{clearTimeout(timeout);if(data.id!==epoch)return;planner?.terminate();planner=null;planning=false;if(data.error){replayOnPlan=false;runIssue={message:data.error,advice:data.advice||null};status(data.error,true);update();return;}result=data.result;renderer?.setResult(result);renderer?.setCursor(.015);event('plan_completed',{algorithm:result.algorithm,metres:result.distance,policyExecuted:false});setTab('test');update();status('Planning preview complete. No learned policy or physical robot executed.');if(replayOnPlan){replayOnPlan=false;replay();}};
   planner.onerror=()=>{clearTimeout(timeout);if(id===epoch){invalidate();status('Planning worker failed.',true);}};planner.postMessage({id,world:clone(world),robot:clone(robot)});
 }
 function replay(){if(!result)return;if(replayFrame){stopReplay();return;}replayStart=performance.now()-Number($('scrub').value)/1000*12000;$('replay').textContent='Pause';function tick(t){const c=Math.min(1,(t-replayStart)/12000);$('scrub').value=Math.round(c*1000);renderer?.setCursor(c);if(c<1)replayFrame=requestAnimationFrame(tick);else stopReplay();}replayFrame=requestAnimationFrame(tick);}
@@ -987,7 +990,9 @@ async function chooseWorld(kind){const street=!!sandbox?.isStreet(),inCapture=sa
     else if(kind==='empty'){if(worldOrigin!=='empty'||editHistory.undo.length)await action('new-map');}
     else if(kind==='saved')await action('restore');}
   robotSetup?.refresh();revealWorld(kind);}
-async function letItTry(){if(sandbox?.isStreet()){$('tab-test').click();$('street-workspace').scrollIntoView({block:'start'});return;}if(!world)return;$('viewport').scrollIntoView({block:'center'});await run();robotSetup?.refresh();}
+// Let it try means watch it: play the route as soon as the plan arrives (not with reduced motion, and never for the transport's own Run).
+let replayOnPlan=false;
+async function letItTry(){if(sandbox?.isStreet()){$('tab-test').click();$('street-workspace').scrollIntoView({block:'start'});return;}if(!world)return;$('viewport').scrollIntoView({block:'center'});replayOnPlan=!matchMedia('(prefers-reduced-motion: reduce)').matches;await run();if(!planning)replayOnPlan=false;robotSetup?.refresh();}
 robotSetup=mountRobotSetup({host:$('robot-setup'),robots:ROBOTS,getState:robotSetupState,actions:{chooseRobot,chooseWorld,run:letItTry,moveStart,showCheck,showRobotSettings}});
 cameraDock=mountCameraDock({getCanvas:activeCanvas,getPreviewViewer:()=>activeCanvas()===$('visual-canvas')?visualViewer:null,setNames:on=>renderer?.setLabels(on)});
 updateUndo();
@@ -1042,7 +1047,7 @@ const showcaseNavigator=mountShowcase({
   },
 });
 function studioStatus(message){const node=$('studio-status');node.textContent=message;node.hidden=!message;}
-mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
+const studioBar=mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
   onHome:()=>{studioStatus('');workbench.hide({restoreFocus:false});$('workspace').scrollIntoView({block:'start'});$('workspace').focus?.({preventScroll:true});},
   openFeature:async(feature,chapter,origin)=>{
     studioStatus('');
@@ -1051,6 +1056,19 @@ mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
     if(feature.target==='#showroom'){if(location.hash==='#showroom')window.dispatchEvent(new HashChangeEvent('hashchange'));else location.hash='showroom';return;}
     try{await showcaseNavigator.openInPlace(feature);}catch(error){studioStatus(error?.message||'That tool could not open. Try it again.');}
   }});
+// Missions: stars for real simulated runs and actions. "Show me" uses controls the playground already has.
+// Pickers live in collapsed <details>; open every closed ancestor so Show me lands on a visible control.
+function missionFocus(control,block='center'){if(!control)return;for(let box=control.closest('details:not([open])');box;box=box.parentElement?.closest('details:not([open])'))box.open=true;control.scrollIntoView({block,behavior:'instant'});control.focus({preventScroll:true});}
+mountMissions({button:$('studio-missions-open'),studio:studioBar,viewport:$('viewport'),show:async place=>{
+  workbench.hide({restoreFocus:false});
+  if(place==='run')return missionFocus($('robot-setup-run'));
+  if(place==='robots')return missionFocus(document.querySelector('#robot-setup .robot-card[aria-pressed="false"]')||document.querySelector('#robot-setup .robot-card'));
+  if(place==='street')return missionFocus(document.querySelector('#robot-setup [data-world="street"]'));
+  if(place==='own')return missionFocus(document.querySelector('#robot-setup [data-world="capture"]'));
+  if(place==='before')return missionFocus($('fork'));
+  if(place==='edit'){$('tab-world').click();await new Promise(r=>requestAnimationFrame(r));return missionFocus($('objects'));}
+  if(place==='spot'){$('tab-test').click();for(let i=0;i<20&&!$('goal-x');i++)await new Promise(r=>setTimeout(r,50));const field=$('goal-x');const box=field?.closest('details');if(box)box.open=true;return missionFocus(field);}
+}});
 // A local handoff opens Capture even when a shared Street route is also present.
 // Do not start a competing lazy Street activation before the file is received.
 if(handoffId)void receiveCaptureHandoff(handoffId);else void sandbox.start();

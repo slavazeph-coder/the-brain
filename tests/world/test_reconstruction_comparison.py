@@ -49,7 +49,8 @@ def alive(pid):
     """Linux zombie descendants are no longer executing and can await host reaping."""
     try:
         return Path(f'/proc/{pid}/stat').read_text().split()[2] != 'Z'
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
+        # A process that exits while its stat file is being read makes the read fail with ESRCH.
         return False
 
 

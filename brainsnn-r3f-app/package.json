@@ -13,9 +13,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs && npm run test:analysis",
+    "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node scripts/check-env-exposure.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs && npm run test:analysis",
     "test:run": "node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
-    "check:bundle": "node scripts/check-three-imports.mjs",
+    "check:bundle": "node scripts/check-three-imports.mjs && node scripts/check-env-exposure.mjs",
     "test:e2e": "playwright test",
     "og:toys": "node scripts/render-toy-og.mjs",
     "test:analysis": "node --test arena-analysis/tests/*.test.cjs",
@@ -26,7 +26,8 @@
     "test:world-projects": "node --test ../tests/world/*project*.test.mjs",
     "world:projects:admin": "node scripts/world-project-admin.mjs",
     "world:projects:worker": "node scripts/world-project-worker-tenant.mjs",
-    "world:projects:storage": "node scripts/world-project-storage.mjs"
+    "world:projects:storage": "node scripts/world-project-storage.mjs",
+    "world:projects:usage": "node scripts/world-project-usage.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1172.0",
@@ -40,6 +41,7 @@
     "@tensorflow/tfjs-backend-wasm": "4.22.0",
     "@thatopen/fragments": "3.6.1",
     "@vitejs/plugin-react": "^5.0.4",
+    "compression": "1.8.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "fflate": "0.8.3",

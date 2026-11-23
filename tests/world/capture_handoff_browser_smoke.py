@@ -63,7 +63,10 @@ def check(browser):
         "document.querySelector('#status')?.textContent?.includes('Loaded 1 local capture')",
         timeout=30000,
     )
-    assert page.locator("#provenance").inner_text() == "LOCAL SOURCE"
+    # On phones the provenance badge sits in the collapsed "Map options" panel, so read its value;
+    # the always-visible heading badge must say the map is the visitor's own source.
+    assert page.locator("#provenance").text_content() == "LOCAL SOURCE"
+    assert page.locator("#workspace-project-basis").inner_text() == "YOUR SOURCE"
     assert page.locator(".source-row button[data-source]").filter(has_text="living-room.png").count() == 1
     assert page.locator('[data-tab="capture"]').get_attribute("aria-selected") == "true"
     remaining = page.evaluate("""async () => new Promise((resolve, reject) => {

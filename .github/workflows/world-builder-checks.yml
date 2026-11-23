@@ -191,6 +191,10 @@ jobs:
       # One studio bar for every tool; separate tool pages open in the workbench beside the world.
       - name: Studio bar, search and in-place workbench
         run: python tests/world/studio_browser_smoke.py
+      - name: BrainSNN Walk phone app (fake camera, moving GPS, exports, handoff)
+        env:
+          WORLD_BROWSERS: chromium,webkit
+        run: python tests/world/walk_browser_smoke.py
       # This flow starts its own frontend/worker and uses no earlier browser outputs.
       # Check retained-source review before the longer reconstruction regressions.
       - name: Unified source, model, drawings and retained job browser flow

@@ -53,7 +53,7 @@ def check(browser, mobile=False):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     view.screenshot(path=str(OUTPUT/(browser.browser_type.name+('-mobile.png' if mobile else '-desktop.png'))),full_page=True)
     open_map_options(page)
-    assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
+    assert page.locator('#provenance').text_content()=='AUTHORED SAMPLE'
     page.locator('#run').click();page.wait_for_timeout(300);print('RUN STATUS',page.locator('#status').inner_text(),errors,flush=True);page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')",timeout=5000)
     assert page.locator('#metric-cost').inner_text()=='Enter rates'
     page.locator('#robotRate').fill('12');page.locator('#robotRate').press('Tab')
@@ -77,7 +77,7 @@ def check(browser, mobile=False):
     # Crafted labels remain text, never executable HTML.
     w=proof['world'];w['name']='<img src=x onerror="window.injected=true">';w['objects'][0]['name']='<svg onload="window.injected=true">'
     page.locator('#files').set_input_files({'name':'safe-map.json','mimeType':'application/json','buffer':json.dumps(w).encode()})
-    assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
+    assert page.locator('#provenance').text_content()=='AUTHORED SAMPLE'
     assert not page.locator('#scale-reviewed').is_checked()
     assert page.evaluate('window.injected') is None
     # A fresh capture must never inherit the sample's geometry or metrics.
@@ -88,7 +88,7 @@ def check(browser, mobile=False):
     import io
     b=io.BytesIO();Image.new('RGB',(20,20)).save(b,format='PNG')
     page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
-    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE'
+    assert page.locator('#provenance').text_content()=='LOCAL SOURCE'
     assert page.locator('#run').is_disabled()
     assert page.locator('#media-preview img').count()==1
     assert 'Source preview' in page.locator('#media-preview').inner_text()
@@ -121,7 +121,7 @@ def check(browser, mobile=False):
     room={'name':'Phone scan / L floor','floors':[{'transform':[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],'polygonCorners':[[x,0,z] for x,z in floor]}],'objects':[],'walls':[]}
     page.locator('#files').set_input_files({'name':'roomplan.json','mimeType':'application/json','buffer':json.dumps(room).encode()})
     page.wait_for_function("document.querySelector('#world-title').textContent==='Phone scan / L floor'")
-    assert page.locator('#provenance').inner_text()=='REVIEW REQUIRED'
+    assert page.locator('#provenance').text_content()=='REVIEW REQUIRED'
     assert 'REVIEW REQUIRED' in page.locator('#scene-basis').inner_text()
     assert not page.locator('#scale-reviewed').is_checked()
     assert page.locator('#floor-width').is_disabled() and page.locator('#floor-depth').is_disabled()
@@ -293,7 +293,7 @@ def check_inference(browser, photo):
     page.wait_for_function("document.querySelector('#status').textContent.startsWith('3D preview ready') || document.querySelector('#depth-status').textContent.startsWith('Could not')",timeout=300000)
     assert page.locator('#status').inner_text().startswith('3D preview ready'),page.locator('#depth-status').inner_text()
     assert page.locator('#visual-canvas').is_visible()
-    assert 'SCALE UNVERIFIED' in page.locator('#provenance').inner_text()
+    assert 'SCALE UNVERIFIED' in page.locator('#provenance').text_content()
     assert page.locator('#run').is_disabled()
     page.locator('#show-source').click();page.locator('#media-preview img').wait_for(state='visible')
     page.locator('#show-visual').click();assert page.locator('#visual-canvas').is_visible()
@@ -383,7 +383,7 @@ def check_capture_keeps_user_map(browser):
         page.locator('#world-examples > summary').click()
     page.locator('#hero-sample').click()
     page.locator('#files').set_input_files({'name':'camera-2.png','mimeType':'image/png','buffer':b.getvalue()})
-    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
+    assert page.locator('#provenance').text_content()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
     assert not errors,errors;ctx.close()
 
 def check_share_video(browser):
