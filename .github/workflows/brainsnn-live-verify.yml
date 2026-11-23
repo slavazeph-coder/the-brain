@@ -70,7 +70,7 @@ jobs:
         run: |
           # Static World Builder and Arena files are served verbatim from public/,
           # so equal bytes prove this exact build is live (not an older container).
-          files="world/index.html world/app.mjs world/sw.js world/detections.mjs world/reconstruction-map.mjs world/api.html arena/site-workspace.js"
+          files="world/index.html world/app.mjs world/sw.js world/world.css world/world-layer-tools.css world/detections.mjs world/reconstruction-map.mjs world/api.html world/robot-capability.mjs world/robot-capability-physics.mjs world/robot-capability-ui.mjs world/robot-capability.css world/bim-workbench.mjs world/bim-workbench-ui.mjs world/bim-workbench.css world/depth-sequence.mjs world/depth-workbench-ui.mjs world/depth-workbench.css arena/site-workspace.js"
           for attempt in $(seq 1 20); do
             stale=""
             for f in $files; do

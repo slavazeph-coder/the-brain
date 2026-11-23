@@ -6,6 +6,13 @@ export const chapters = [
     description: 'Choose a robot body, change the room and see which routes fit.',
     features: [
       {
+        label: 'Test your robot’s capabilities',
+        detail: 'Use your robot profile for a physics route, check arm reach and compare a recording with real telemetry. Review motor and thermal estimates when you supply the parameters.',
+        access: 'Has an example',
+        target: 'layer:robotcapability',
+        focus: '[data-cap-prepare]',
+      },
+      {
         label: 'Run a practice route',
         filmCues: [1, 3],
         detail: 'Pick a robot and a practice room. Plan a route, then replay it on the map.',
@@ -101,6 +108,13 @@ export const chapters = [
     title: 'Bring a place into the playground',
     description: 'Start with a picture, a slow walkthrough or a file you already have.',
     features: [
+      {
+        label: 'Inspect photo and video depth',
+        detail: 'Compare source frames with estimated depth, read forward distances and export a frame’s visible points. Open a saved result or use an available processing engine.',
+        access: 'Has an example',
+        target: 'layer:depth',
+        focus: '[data-depth-source]',
+      },
       {
         label: 'Explore the showroom',
         detail: 'Walk between pictures, move a cart and record a robot trying the route.',
@@ -223,6 +237,12 @@ export const chapters = [
     title: 'See what the model can tell you',
     description: 'Compare a building model with its capture, check the changes and prepare files for review.',
     features: [
+      {
+        label: 'Manage scan-to-BIM projects',
+        detail: 'Queue registered scans in separate projects, resume real processing jobs, review results and download the building files your worker produced.',
+        access: 'Needs processing',
+        target: 'layer:bimworkbench',
+      },
       {
         label: 'Make a building model',
         detail: 'Start with a worker result, check the scale, then compile a model and inspect its walls and objects.',
