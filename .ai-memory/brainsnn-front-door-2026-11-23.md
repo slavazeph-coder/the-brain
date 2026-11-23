@@ -25,7 +25,7 @@ The owner asked what comes next for the cleanup, then said "Yes all": pull the t
 - Studio chapters open on 2 core tools each (`coreTools` in `showcase-features.mjs`, 12 in all), with **More tools** for the rest. Search still covers all 50.
   - The core picks are a guess, not usage data.
 - Events: `front_door_viewed`, and `front_door_opened` with `door`.
-- Caches: World SW `world-shell-front-door-v56`, Walk SW `brainsnn-walk-v4`.
+- Caches: World SW `world-shell-front-door-workbenches-v57` (after merging #339), Walk SW `brainsnn-walk-v4`.
 - Docs: `docs/front-door.md`.
 
 ## Never-mounted code found (candidates for removal)

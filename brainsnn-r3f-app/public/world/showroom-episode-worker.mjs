@@ -14,8 +14,9 @@ self.addEventListener('message',async ({data})=>{
   busy=true;
   try {
     const controller=data.controller??'waypoint';
-    if (!['waypoint','imitation'].includes(controller)) throw Error('Choose one of the two simulated drivers.');
-    const options=controller==='waypoint' ? {controller} : {controller,trainingId:showroomDriver.id,
+    const choices=data.scene?.robotCapability?['waypoint','mppi']:['waypoint','imitation'];
+    if (!choices.includes(controller)) throw Error('Choose a driver supported by this exact robot model.');
+    const options=controller!=='imitation' ? {controller} : {controller,trainingId:showroomDriver.id,
       act:observation=>imitationVelocity(showroomDriver,observation)};
     physics??=loadRobotTaskPhysics().catch(error=>{physics=undefined; throw error;});
     const episode=await runShowroomEpisode(await physics,data.scene,options);

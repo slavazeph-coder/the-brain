@@ -1,8 +1,8 @@
 import {buildReviewedMapEpisodeScene} from './reviewed-map-episode.mjs';
 import {mountShowroomRun} from './showroom-run-ui.mjs';
 
-export function openReviewedMapRun(world, goal, source, opener = document.activeElement) {
-  const scene = buildReviewedMapEpisodeScene(world, goal, source);
+export function openReviewedMapRun(world, goal, source, opener = document.activeElement, capability = null) {
+  const scene = buildReviewedMapEpisodeScene(world, goal, source, capability);
   const dialog = document.createElement('dialog');
   dialog.className = 'map-run-dialog';
   dialog.setAttribute('aria-labelledby','active-run-title');
@@ -23,6 +23,7 @@ export function openReviewedMapRun(world, goal, source, opener = document.active
     },{once:true});
     dialog.querySelector('[data-close]').onclick = () => dialog.close();
     dialog.showModal();
+    return {dialog,run};
   } catch (error) {
     dialog.remove();
     throw error;

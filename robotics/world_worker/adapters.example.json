@@ -1,5 +1,15 @@
 [
   {
+    "id": "metric-depth-sequence",
+    "label": "Photo/video depth review in estimated metres (MoGe-2, CPU)",
+    "enabled": false,
+    "license_reviewed": true,
+    "input_kinds": ["image", "video"],
+    "max_inputs": 1,
+    "timeout_seconds": 900,
+    "command": ["/absolute/path/to/colmap-venv/bin/python", "/absolute/path/to/the-brain/robotics/world_worker/depth_sequence.py", "--input-manifest", "{input_manifest}", "--model", "/absolute/path/to/moge-2-vitb-normal.onnx", "--max-frames", "16", "--max-depth-metres", "100"]
+  },
+  {
     "id": "depth-small",
     "label": "Relative-depth photo preview",
     "enabled": false,
@@ -144,7 +154,8 @@
       "model": "EfficientDet-Lite2 (COCO)"
     },
     "dimension_checks": true,
-    "bim_review": true
+    "bim_review": true,
+    "registered_survey_cloud": true
   },
   {
     "id": "scene-usd-site-vocabulary",
@@ -181,7 +192,8 @@
       "vocabulary": "the request may send `vocabulary`: a list of up to 40 phrases, e.g. [\"golf cart\", \"stack of tires\", \"pallet rack\"]; otherwise a default room + light-industrial list"
     },
     "dimension_checks": true,
-    "bim_review": true
+    "bim_review": true,
+    "registered_survey_cloud": true
   },
   {
     "id": "reference-scale",

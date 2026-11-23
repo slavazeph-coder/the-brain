@@ -1,5 +1,6 @@
 // Export the same floor proxies that take part in the MuJoCo run and animate its measured poses.
 import {showroomEpisodeColliders} from './showroom-episode-physics.mjs';
+import {normalizeRobotCapability} from './robot-capability.mjs';
 
 function number(value) {
   if (!Number.isFinite(value)) throw new Error('The recorded run contains an invalid coordinate.');
@@ -41,6 +42,7 @@ function prism(geometry, index) {
 
 /** The cart is a kinematic replay of recorded samples. The stage does not re-run the controller. */
 export function makeShowroomEpisodeUSD(episode) {
+  if(episode.robotCapability)return capabilityUSD(episode);
   const {scene, frames, sceneSha256, sampleIntervalSeconds} = episode;
   if (!frames?.length || !/^[a-f0-9]{64}$/.test(sceneSha256) || !(sampleIntervalSeconds > 0)) {
     throw new Error('Record a complete showroom run before saving a replay.');
@@ -81,6 +83,57 @@ ${colliders.map(prism).join('\n')}
 ${keys.join(',\n')}
         }
         uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}
+`;
+}
+
+function capabilityUSD(episode) {
+  if(episode.schema!=='brainsnn.robot-capability-episode.v2'||!episode.frames?.length||!Number.isFinite(episode.sampleIntervalSeconds)||episode.sampleIntervalSeconds<=0||!/^[a-f0-9]{64}$/.test(episode.capabilitySha256)||!/^[a-f0-9]{64}$/.test(episode.sceneSha256))throw Error('A complete capability run is required for replay.');
+  const p=normalizeRobotCapability(episode.robotCapability),rate=1/episode.sampleIntervalSeconds;
+  const clearance=Math.min(.025,p.body.height*.12),diff=p.drive.kind==='differential';
+  const center=diff?(p.body.height+clearance)/2-p.drive.wheelRadiusM:0;
+  const sample=f=>tuple([f.position[0],f.heightMeters,f.position[1]]);
+  const orientation=f=>{const [w,x,y,z]=f.quaternionWxyz;return tuple([w,x,z,-y]);};
+  return `#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 0
+    endTimeCode = ${number(episode.frames.at(-1).time*rate)}
+    timeCodesPerSecond = ${number(rate)}
+    framesPerSecond = ${number(rate)}
+)
+def Xform "World" {
+    custom string roomSceneSha256 = "${episode.sceneSha256}"
+    custom string robotCapabilitySha256 = "${episode.capabilitySha256}"
+    custom string recording = "Recorded MuJoCo body proxy; kinematic replay, not controller execution. Wheel dynamics remain in the MJCF."
+    def PhysicsScene "Physics" {
+        vector3f physics:gravityDirection = (0, -1, 0)
+        float physics:gravityMagnitude = 9.81
+    }
+${showroomEpisodeColliders(episode.scene).map(prism).join('\n')}
+    def Xform "Robot" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    ) {
+        bool physics:kinematicEnabled = true
+        double3 xformOp:translate.timeSamples = {
+${episode.frames.map(f=>`            ${number(f.time*rate)}: ${sample(f)}`).join(',\n')}
+        }
+        quatf xformOp:orient.timeSamples = {
+${episode.frames.map(f=>`            ${number(f.time*rate)}: ${orientation(f)}`).join(',\n')}
+        }
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        def Cube "Body" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        ) {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.16, 0.55, 0.86)]
+            double3 xformOp:translate = (0, ${number(center)}, 0)
+            double3 xformOp:scale = ${tuple([p.body.depth,diff?p.body.height-clearance:p.body.height,p.body.width])}
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
     }
 }
 `;

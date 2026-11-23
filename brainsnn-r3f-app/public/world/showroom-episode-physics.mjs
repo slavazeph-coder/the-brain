@@ -1,4 +1,5 @@
-// A fixed planar cart follows one of the saved showroom routes. Room X/Z maps to MuJoCo X/-Y.
+// Legacy recordings retain the fixed cart. A source-bound capability opts into the separate v2 model.
+import {normalizeRobotCapability} from './robot-capability.mjs';
 const DT = .005, SAMPLE_STEPS = 10, SAMPLE = DT * SAMPLE_STEPS;
 const RADIUS = .175, HEIGHT = .24, SPEED = .65;
 const MAX_OBSTACLES = 2304, MAX_VERTICES = 24000, MAX_ROUTE = 180;
@@ -37,7 +38,10 @@ function checkScene(scene) {
     'This room exceeds the one-kilometre floor limit for a cart run.');
   const point = p => Array.isArray(p) && p.length === 2 && p.every((v,i) => Number.isFinite(v) &&
     v >= bounds[i]-1e-6 && v <= bounds[i+2]+1e-6);
-  check(scene.cartRadius===RADIUS && scene.cartHeight===HEIGHT && ['before','after'].includes(scene.variant),
+  const profile=scene.robotCapability?normalizeRobotCapability(scene.robotCapability):null;
+  const radius=profile?Math.hypot(profile.body.width,profile.body.depth)/2:RADIUS;
+  const height=profile?profile.body.height:HEIGHT;
+  check(Math.abs(scene.cartRadius-radius)<1e-10 && scene.cartHeight===height && ['before','after'].includes(scene.variant),
     'Choose a saved room layout for the practice cart.');
   check(typeof scene.title === 'string' && scene.title.length<=160 && typeof scene.provenance === 'string' &&
     scene.provenance.length<=3000 && ((typeof scene.objectId==='string' && scene.objectId.length<=96) ||
@@ -65,7 +69,7 @@ function checkScene(scene) {
   }
 }
 
-export function buildShowroomEpisodeScene(room, {objectId=room.routes.objectId, variant='before'}={}) {
+export function buildShowroomEpisodeScene(room, {objectId=room.routes.objectId, variant='before',robotCapability=null}={}) {
   const comparison = [room.routes,...(room.comparisons??[])].find(c=>c.objectId===objectId);
   check(comparison && ['before','after'].includes(variant), 'Choose an object with two saved routes.');
   const obstacles = [];
@@ -83,6 +87,7 @@ export function buildShowroomEpisodeScene(room, {objectId=room.routes.objectId, 
     bounds:[...room.bounds],cartRadius:RADIUS,cartHeight:HEIGHT,
     route:comparison[variant].points.map(p=>[...p]),obstacles};
   if(room.sourceVideo?.sha256) scene.sourceVideoSha256=room.sourceVideo.sha256;
+  if(robotCapability){scene.robotCapability=normalizeRobotCapability(robotCapability);scene.cartRadius=Math.hypot(scene.robotCapability.body.width,scene.robotCapability.body.depth)/2;scene.cartHeight=scene.robotCapability.body.height;}
   checkScene(scene);
   return scene;
 }
@@ -106,6 +111,7 @@ export function showroomEpisodeColliders(scene) {
 }
 
 export function makeShowroomEpisodeMJCF(scene) {
+  check(!scene.robotCapability,'Use the capability MJCF exporter for a selected robot profile.');
   const colliders = showroomEpisodeColliders(scene);
   const meshes = [], geoms = [];
   const colors = {object:'.28 .49 .49 1',unknown:'.54 .43 .28 1',wall:'.35 .38 .44 1',floor:'.72 .74 .76 1'};
@@ -178,6 +184,11 @@ export function limitShowroomVelocity(command) {
 }
 
 export async function runShowroomEpisode(mujoco, scene, {controller='waypoint',act,trainingId=null}={}) {
+  if(scene.robotCapability) {
+    if(act||trainingId)throw Error('Legacy imitation policies cannot run on a different robot capability.');
+    const {runRobotCapabilityEpisode}=await import('./robot-capability-physics.mjs');
+    return runRobotCapabilityEpisode(mujoco,scene,{controller});
+  }
   check((['waypoint','stationary'].includes(controller) && act===undefined) || (controller==='imitation' && typeof act==='function'),
     'Choose the waypoint controller or supply a local imitation policy.');
   check(trainingId===null || (controller==='imitation' && typeof trainingId==='string' && trainingId.length<=128),

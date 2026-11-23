@@ -175,8 +175,9 @@ it('world processing: visitors switched off get no session; switched on, they ar
     const job = (engine) => web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine, upload_ids: [upload], consent: true } });
     assert.equal((await job('lingbot-map-stream')).status, 403);
     assert.equal((await job('demo-replay')).status, 403);
+    assert.equal((await job('depth-pro-2')).status, 403, 'the restricted Apple engine is never opened to visitors');
     assert.equal((await job('colmap-sparse')).status, 201);
-    assert.equal((await job('colmap-sparse')).status, 201);
+    assert.equal((await job('metric-depth-sequence')).status, 201, 'the bounded licensed depth engine shares the existing visitor quota');
     const third = await job('colmap-sparse');
     assert.equal(third.status, 429); assert.match(third.data.detail, /2 jobs a day/);
     assert.ok(worker.seen.filter((r) => r.auth).every((r) => r.auth === `Bearer ${VISITOR}`));

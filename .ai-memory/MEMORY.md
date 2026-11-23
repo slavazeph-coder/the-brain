@@ -24,6 +24,10 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Photo and video depth review](world-depth-workbench-2026-11-23.md) — native frame/pixel/point review, pinned MoGe worker baseline, source identity checks and disabled separately licensed Depth Pro 2 connector; coordinated robot/scan release approved.
+
+→ [Robot capability and scan projects](world-robot-capability-2026-11-22.md) — shared robot profile, native drivetrain/MPPI, arm and telemetry checks, batch scan queue and shared project evidence.
+
 → [Unified World Builder playground](world-studio-2026-11-21.md) — map-first phone and desktop workspace, shared tool library, in-page workbench and direct activity links.
 → [API sell-readiness audit](api-sell-readiness-2026-11-21.md) — Nov 21: World API works end to end with operator keys; monthly usage meter + CSV export added; compression/caching cut first load 65%; processing tenants, S3 and backups remain ops steps.
 → [BrainSNN Walk](brainsnn-walk-2026-11-22.md) — Nov 22: phone-first /walk/ PWA after myDAR (walk → tap features → honest GPS figure → export ZIP/GeoJSON/GPX/CSV → video to World Builder); LiDAR needs a native iOS app.
