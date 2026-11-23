@@ -43,3 +43,25 @@ and make it into an app like this".
 - Native iOS LiDAR capture app producing `brainsnn.capture.v1`.
 - GeoPackage export (needs sql.js).
 - Pricing and paywall: none exists.
+
+## Nov 23 — "go deeper, fix all"
+
+- **GeoPackage export** (`walk-gpkg.mjs`): OGC GeoPackage 1.4, written in the browser with vendored sql.js 1.13.0
+  (`public/walk/vendor`, MIT, sha256 recorded).
+  - `track` LineString and `features` Point layers, plus a `walk_record` attributes table holding the full
+    validated walk.
+  - A `.gpkg` alone reopens read-only. GDAL 3.9.1 opened the browser-made file locally.
+- **Surveyed marks**: `pinWalk()` shifts the walk by the marks' mean offset.
+  - One mark reads "Unchecked".
+  - Two or more marks state the largest leave-one-out miss.
+  - `positionStatement()` is the single source of that statement for the UI and every export.
+- **Map**: pinch, wheel and drag zoom, "Fit walk", and double tap.
+- **CI root causes fixed**:
+  - `camera-tour-video.mjs` capped per-frame advance (stall slows instead of skips; empty-video flake since 19 Nov).
+  - `alive()` ESRCH race in `test_reconstruction_comparison.py`.
+  - The `#provenance` inner_text reads in 7 smokes, collapsed on phones since #337.
+- **Build**: `build-movement-pose.mjs` falls back from kaggle.com to `MOVENET_MIRROR`, then to brainsnn.com, with
+  pinned hashes. The full `npm run build` passes here (Node fetch needs `NODE_USE_ENV_PROXY=1` in this sandbox only).
+- **Local verification**:
+  - `tests/world/requirements-ci.txt` installs fine in the scratch venv.
+  - native capture, real-to-sim, site processing and scene smokes pass locally.
