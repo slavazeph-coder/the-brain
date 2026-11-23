@@ -99,6 +99,10 @@ def check_creative_engine(browser, mobile):
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    # WebKit reports a ResizeObserver feedback loop as a page error; Chromium only fires a window
+    # error event. Record those too so the loop fails here in either browser.
+    page.add_init_script("window.__layoutLoops = [];"
+                         "addEventListener('error', e => { if (/ResizeObserver/.test(e.message)) window.__layoutLoops.push(e.message); });")
     page.goto(BASE + '/app', wait_until='networkidle')
     page.fill('#brain-scan-input', PRESSURE_AD)
     page.locator('.scan-actions button').last.click()
@@ -129,6 +133,10 @@ def check_creative_engine(browser, mobile):
     page.get_by_role('button', name='Load example').click()
     page.get_by_role('button', name=re.compile('Compare variants')).click()
     page.get_by_text(re.compile(r'Variant [AB] wins|Tie\.')).first.wait_for(timeout=30000)
+    for width in (1100, 800, 1366 if not mobile else 390):
+        page.set_viewport_size({'width': width, 'height': 900})
+        page.wait_for_timeout(250)
+    assert page.evaluate('window.__layoutLoops.length') == 0, page.evaluate('window.__layoutLoops.slice(0, 3)')
     page.goto(BASE + '/app/?checkout=cancelled', wait_until='networkidle')
     assert 'Nothing was charged' in page.locator('.analyzer-notice').inner_text()
     assert 'checkout' not in page.url
