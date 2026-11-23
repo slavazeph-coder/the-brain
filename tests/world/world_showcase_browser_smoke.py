@@ -492,6 +492,9 @@ def verify_tool_actions(page):
 
 def verify_current_map_recording(page):
     page.locator('[data-tab=test]').click()
+    selected_robot = page.locator('#robot').input_value()
+    selected_envelope = {key: float(page.locator(f'#robot-{key}').input_value())
+                         for key in ('width', 'depth', 'speed', 'margin')}
     page.locator('.goal-spot > summary').click()
     page.locator('#goal-x').fill('10')
     page.locator('#goal-z').fill('9')
@@ -501,16 +504,30 @@ def verify_current_map_recording(page):
     expect(dialog).to_be_visible()
     expect(dialog.locator('[data-run-object]')).to_be_hidden()
     expect(dialog.locator('[data-run-variant]')).to_be_hidden()
-    dialog.locator('[data-run-driver]').select_option('imitation')
+    dialog.locator('[data-run-driver]').select_option('mppi')
     dialog.locator('[data-run-start]').click()
     expect(dialog.locator('[data-run-result]')).to_be_visible(timeout=90000)
     with page.expect_download() as promise:
         dialog.locator('[data-run-json]').click()
     recording = json.loads(Path(promise.value.path()).read_text())
+    assert recording['schema'] == 'brainsnn.robot-capability-episode.v2'
+    profile = recording['robotCapability']
+    assert profile['schema'] == 'brainsnn.robot-capability.v1'
+    assert profile['id'] == selected_robot
+    assert profile['body']['width'] == selected_envelope['width']
+    assert profile['body']['depth'] == selected_envelope['depth']
+    assert profile['limits']['speedMps'] == selected_envelope['speed']
+    assert profile['marginM'] == selected_envelope['margin']
+    assert recording['scene']['robotCapability'] == profile
+    assert re.fullmatch(r'[a-f0-9]{64}', recording['capabilitySha256'])
     source = recording['scene']['sourceMap']
     assert source['kind'] == 'authored' and source['goal'] == {'x':10, 'z':9}
     assert source['mapReviewed'] and source['scaleReviewed'] and source['blocked']
-    assert recording['score']['success'] and recording['provenance']['controllerKind'] == 'imitation'
+    assert source['robotCapabilityId'] == selected_robot
+    assert all(source['plannerRobot'][key] == value for key, value in selected_envelope.items())
+    assert recording['score']['success'] and recording['provenance']['controllerKind'] == 'mppi'
+    assert recording['provenance']['physicsExecuted'] and recording['engine']['name'] == 'MuJoCo'
+    assert not recording['provenance']['learnedPolicyExecuted'] and not recording['provenance']['physicalValidated']
     dialog.locator('[data-close]').click()
     expect(dialog).to_have_count(0)
     expect(opener).to_be_focused()
@@ -520,7 +537,8 @@ def verify_current_map_recording(page):
     expect(dialog.locator('[data-run-result]')).to_be_hidden()
     dialog.locator('[data-close]').click()
     return {'sceneSha256':recording['sceneSha256'], 'outcome':recording['score']['reason'],
-            'trainingId':recording['provenance']['trainingId'], 'goal':source['goal']}
+            'schema':recording['schema'], 'capabilitySha256':recording['capabilitySha256'],
+            'robotId':profile['id'], 'controller':recording['provenance']['controllerKind'], 'goal':source['goal']}
 
 
 def verify_showroom_recording(page, base_url, output, engine_name):
@@ -591,6 +609,8 @@ def verify_showroom_recording(page, base_url, output, engine_name):
 
 def verify_browser(engine, url, output, axe_script):
     flags = {'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']} if engine.name == 'chromium' else {}
+    if engine.name == 'chromium' and os.environ.get('BROWSER_EXECUTABLE'):
+        flags['executable_path'] = os.environ['BROWSER_EXECUTABLE']
     browser = engine.launch(headless=True, **flags)
     try:
         context = browser.new_context(viewport={'width': 1360, 'height': 1000}, reduced_motion='reduce',
