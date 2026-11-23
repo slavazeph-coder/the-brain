@@ -78,7 +78,9 @@ class DepthHandler(ShowcaseHandler):
                                    'engines': [{'id': 'metric-depth-sequence', 'label': 'Fixture depth', 'available': True,
                                                 'input_kinds': ['image', 'video'], 'max_inputs': 1},
                                                {'id': 'depth-pro-2', 'label': 'Restricted model', 'available': False,
-                                                'input_kinds': ['image', 'video'], 'max_inputs': 1}]})
+                                                'input_kinds': ['image', 'video'], 'max_inputs': 1},
+                                               {'id': 'photo-metric', 'label': 'Ordinary photo preview', 'available': True,
+                                                'input_kinds': ['image'], 'max_inputs': 1}]})
         if self.path == '/v1/download/depth-fixture':
             self.server.ticket_reads += 1
             self.send_response(200)
@@ -183,6 +185,12 @@ def smoke(origin, output, server):
         page.locator('#connection button[aria-label="Close"]').click()
         expect(get('availability')).to_contain_text('1 depth engine is available')
         expect(get('engine').locator('option[value="depth-pro-2"]')).to_have_js_property('disabled', True)
+        # The ordinary capture route consumes reconstruction artifacts, so depth
+        # sequences must be offered only by their dedicated native workbench.
+        page.locator('#tab-capture').click()
+        expect(page.locator('#engine option[value="photo-metric"]')).to_have_count(1)
+        expect(page.locator('#engine option[value="metric-depth-sequence"]')).to_have_count(0)
+        expect(page.locator('#engine option[value="depth-pro-2"]')).to_have_count(0)
         get('source').set_input_files({'name': 'depth-test.jpg', 'mimeType': 'image/jpeg', 'buffer': server.depth_source})
         expect(get('run')).to_be_disabled()
         get('consent').check()
@@ -228,7 +236,8 @@ def smoke(origin, output, server):
         assert not errors, errors
         assert not external, external
         print(json.dumps({'depthProbe': True, 'opticalZ': True, 'frameScrub': True, 'pointsExport': True,
-                          'projectHandoff': True, 'realWorkerClientFixture': True, 'inferenceExecuted': False,
+                          'projectHandoff': True, 'dedicatedDepthEngineRoute': True,
+                          'realWorkerClientFixture': True, 'inferenceExecuted': False,
                           'originalEvidenceBytes': True, 'sourceUploadBytes': len(server.uploaded),
                           'ticketReads': server.ticket_reads, 'mobileWidths': [390, 320], 'pageErrors': errors}, indent=2))
         browser.close()
