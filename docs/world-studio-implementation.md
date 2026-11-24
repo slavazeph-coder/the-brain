@@ -4,7 +4,7 @@ World Builder is live on brainsnn.com as a labelled preview, deployed from `main
 
 ## What works now
 
-The flagship homepage preserves the near-black, cyan and violet identity and uses the requested headline. `/` and `/world` embed the local workspace; `/?classic=1`, Arena and research routes remain accessible. The frame now fits short landscape screens. The same-site [API guide](../brainsnn-r3f-app/public/world/api.html) describes private operator-provisioned access and its limits.
+The flagship homepage preserves the near-black, cyan and violet identity and uses the requested headline. `/world` embeds the local workspace (since Nov 23, 2026 `/` is the three-door front page; see [front-door.md](front-door.md)); `/?classic=1`, Arena and research routes remain accessible. The frame now fits short landscape screens. The same-site [API guide](../brainsnn-r3f-app/public/world/api.html) describes private operator-provisioned access and its limits.
 
 A selected photo can run Depth Anything V2 Small on-device after explicit approval to download the runtime and model. It produces an explorable relative-depth point cloud, with source comparison, cancellation, binary PLY export and provenance. It does not create unseen surfaces, establish metric scale or create collision geometry. Model files are downloaded; the source image is not uploaded. The model is pinned to `onnx-community/depth-anything-v2-small@4472b7362082ad9968fee890ca0f1e5aca36b93d`, q8, whose model card declares Apache-2.0. This is distinct from the still-unqualified Lyra pipeline.
 

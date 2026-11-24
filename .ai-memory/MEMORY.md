@@ -31,6 +31,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 → [Unified World Builder playground](world-studio-2026-11-21.md) — map-first phone and desktop workspace, shared tool library, in-page workbench and direct activity links.
 → [API sell-readiness audit](api-sell-readiness-2026-11-21.md) — Nov 21: World API works end to end with operator keys; monthly usage meter + CSV export added; compression/caching cut first load 65%; processing tenants, S3 and backups remain ops steps.
 → [BrainSNN Walk](brainsnn-walk-2026-11-22.md) — Nov 22: phone-first /walk/ PWA after myDAR (walk → tap features → honest GPS figure → export ZIP/GeoJSON/GPX/CSV → video to World Builder); LiDAR needs a native iOS app.
+→ [Front door](brainsnn-front-door-2026-11-23.md) — Nov 23: `/` = three doors (Walk, World Builder, API); World Builder at `/world/`, old root links still open it; nav cut to 3 + Walk button; studio chapters show 2 core tools + More tools. Deletions wait for the owner's list.
 → [Five-sense cart trial and recorded views](brainsnn-five-senses-2026-11-20.md) — PR328, the continuation on the same evidence, two paired evaluations and simulated sensing.
 → [Linked showroom](world-linked-showroom-2026-11-20.md) — object selection, recovered video times, route comparisons, the camera walkthrough and recorded cart and gripper simulations.
 

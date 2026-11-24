@@ -6,6 +6,8 @@ import re
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[2]
 URL=os.environ.get('WORLD_URL','http://127.0.0.1:8765/world/index.html')
+# The site root is the three-door homepage; World Builder's framed entry is /world.
+WORLD_ENTRY=URL.rstrip('/')+'/world/' if re.match(r'^https?://[^/]+/?$',URL) else URL
 OUTPUT=ROOT/'output/playwright/world'
 OUTPUT.mkdir(parents=True,exist_ok=True)
 
@@ -46,7 +48,7 @@ def open_map_options(page):
 def check(browser, mobile=False):
     ctx=browser.new_context(viewport={'width':390,'height':844} if mobile else {'width':1440,'height':1000},device_scale_factor=1,has_touch=mobile)
     page=ctx.new_page();view=page;errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page=open_world(view,URL)
+    page=open_world(view,WORLD_ENTRY)
     assert page.locator('.system-card').count()==25
     assert page.locator('.system-card').filter(has_text='Surface inspection').get_attribute('data-state')=='local'
     assert page.locator('.system-card').filter(has_text='MetricTrail long-video trial').get_attribute('data-state')=='gated'
@@ -153,11 +155,33 @@ def check(browser, mobile=False):
     assert errors==[],errors
     ctx.close()
 
+def check_front_door(page, base):
+    """The root is three doors; links shared while World Builder was the homepage still open it."""
+    response=page.goto(base+'/',wait_until='domcontentloaded')
+    assert response is not None and response.status==200
+    page.locator('#fd-title').wait_for()
+    assert page.locator('iframe').count()==0,'The homepage must not load World Builder'
+    doors=page.get_by_role('list',name='Choose where to start').locator('a.fd-door')
+    assert [doors.nth(i).get_attribute('href') for i in range(doors.count())]==['/walk/','/world/','/world/api.html']
+    for i in range(3):assert doors.nth(i).locator('.fd-door-limit').inner_text().strip(),'Each door states its limitation'
+    nav=page.get_by_role('navigation',name='Main navigation',exact=True)
+    assert [a.inner_text() for a in nav.locator(':scope > a').all()]==['World Builder','Creative Engine','API','Lab']
+    assert all(a.is_visible() for a in nav.locator(':scope > a').all()),'Every primary link stays visible on a phone'
+    assert page.locator('header .world-nav-cta').get_attribute('href')=='/walk/'
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1'),'The homepage must not scroll sideways'
+    doors.nth(1).click();page.wait_for_url(base+'/world/')
+    assert open_world(page,base+'/world/',require_response=True) is not page
+    for old,src in [('/?sandbox=street&scene=green-gardens','/world/index.html?sandbox=street&scene=green-gardens'),('/#showcase','/world/index.html#showcase')]:
+        page.goto(base+old,wait_until='domcontentloaded')
+        page.locator(f'iframe[src="{src}"]').wait_for(state='attached')
+        assert page.locator('#fd-title').count()==0,f'{old} must still open World Builder'
+
 def check_routes(browser, base):
     """Exercise actual built-site route boundaries and links out of the frame."""
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    for route in ['/', '/world', '/world/']:
+    check_front_door(page,base)
+    for route in ['/world', '/world/']:
         frame=open_world(page,base+route,require_response=True)
         assert frame is not page, 'Production World routes must retain the iframe shell'
         frame.locator('#hero-capture').click()
@@ -193,7 +217,7 @@ def check_measurements(browser):
     """Authored input fixture exercises self-reported evidence; no physical measurement is claimed."""
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     view=ctx.new_page();errors=[];view.on('pageerror',lambda e:errors.append(str(e)))
-    page=open_world(view,URL)
+    page=open_world(view,WORLD_ENTRY)
     authored={'schema':'brainsnn.world.v1','name':'Measurement contract fixture','width':8,'depth':8,'provenance':'observed','scaleReviewed':True,'mapReviewed':True,'start':{'x':1,'z':1},'objects':[{'id':'unknown-corner','name':'Unobserved corner','kind':'unknown','x':4,'z':4,'w':1,'d':1,'h':1}]}
     def import_map(value):
         page.locator('#files').set_input_files({'name':'measurement-fixture.json','mimeType':'application/json','buffer':json.dumps(value).encode()})
@@ -280,7 +304,7 @@ def check_inference(browser, photo):
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     requests=[];ctx.on('request',lambda request:requests.append({'method':request.method,'url':request.url,'body':request.post_data}))
     view=ctx.new_page();errors=[];view.on('pageerror',lambda error:errors.append(str(error)))
-    page=open_world(view,URL)
+    page=open_world(view,WORLD_ENTRY)
     page.locator('#files').set_input_files(photo)
     assert page.locator('#run').is_disabled()
     assert not any('huggingface.co' in item['url'] for item in requests),'No model fetch before consent'
@@ -359,8 +383,8 @@ def check_app_shell(browser):
     # Dismissal is not an error and does not download.
     page.evaluate("()=>{window.__dl=0;document.addEventListener('click',e=>{if(e.target.download)window.__dl++;},true);navigator.share=async()=>{const e=new Error('cancel');e.name='AbortError';throw e;};}")
     page.locator('[data-action=proof]').click();page.wait_for_timeout(300);assert page.evaluate('window.__dl')==0
-    # On the homepage the app is framed: Install opens the standalone World document at the top level, where it applies.
-    page.goto(url.split('/world/')[0]+'/',wait_until='networkidle')
+    # At /world the app is framed: Install opens the standalone World document at the top level, where it applies.
+    page.goto(url.split('/world/')[0]+'/world/',wait_until='networkidle')
     if page.locator('iframe[src="/world/index.html"]').count():
         frame=page.frame(url=re.compile(r'/world/index\.html$'));frame.wait_for_function("document.querySelectorAll('.system-card').length===25")
         frame.locator('[data-tab=capture]').click();frame.locator('[data-action=install]').click()

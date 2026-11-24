@@ -25,9 +25,11 @@ WORKBENCH_SAMPLES = ('/world/autonomy.html#view', '/world/sense-trial.html', '/a
 
 
 def chapter_sizes(page):
+    """Each chapter's (core, total) tool counts, from the catalog the page itself loads."""
     return page.evaluate("""async () => {
       const {chapters} = await import('./showcase-features.mjs');
-      return Object.fromEntries(chapters.map(chapter => [chapter.id, chapter.features.length]));
+      return Object.fromEntries(chapters.map(chapter => [chapter.id,
+        [chapter.features.filter(feature => feature.core).length, chapter.features.length]]));
     }""")
 
 
@@ -59,12 +61,19 @@ def open_chapter(page, key):
 def verify_chapters(page, sizes):
     for key in CHAPTERS:
         button = open_chapter(page, key)
+        core, total = sizes[key]
         tools = page.locator('#studio-panel .studio-tool')
-        expect(tools).to_have_count(sizes[key])
+        # A chapter opens on its core tools; More tools lists the rest in place, focused on the first new one.
+        expect(tools).to_have_count(core)
+        expect(page.locator('#studio-panel .studio-panel-count')).to_have_text(f'{core} of {total} tools')
+        expect(tools.first).to_be_focused()
+        page.locator('#studio-more-tools').click()
+        expect(tools).to_have_count(total)
+        expect(page.locator('#studio-more-tools')).to_have_count(0)
+        expect(tools.nth(core)).to_be_focused()
         for card in tools.all():
             assert card.locator('strong').inner_text().strip()
             assert card.locator('.studio-access').inner_text().strip()
-        expect(page.locator('#studio-panel .studio-tool').first).to_be_focused()
         page.keyboard.press('Escape')
         expect(page.locator('#studio-panel')).to_be_hidden()
         expect(button).to_have_attribute('aria-expanded', 'false')
@@ -330,7 +339,7 @@ def verify_browser(engine, url, output, axe_script):
         report = {'engine': engine.name, 'flow': flow, 'missions': missions, 'chapters': sizes, 'searchHits': hits, 'workbench': list(WORKBENCH_SAMPLES),
                   'layouts': layouts, 'axeViolations': violations, 'pageErrors': errors, 'writes': writes}
         (output/f'{engine.name}-studio.json').write_text(json.dumps(report, indent=2) + '\n')
-        print(f'{engine.name}: {sum(sizes.values())} tools in {len(sizes)} chapters, missions {missions["stars"]}, search, in-page tools, '
+        print(f'{engine.name}: {sum(total for _, total in sizes.values())} tools ({sum(core for core, _ in sizes.values())} core) in {len(sizes)} chapters, missions {missions["stars"]}, search, in-page tools, '
               f'{len(WORKBENCH_SAMPLES)} workbench pages, retained map edit, 390/320 px and larger text.', flush=True)
     finally:
         browser.close()

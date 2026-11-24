@@ -347,3 +347,8 @@ html[data-contrast=more] #unified-workspace[data-flow] .workspace-journey::befor
 }
 @media(max-width:760px){.practice-examples{grid-template-columns:1fr}.playground-shortcuts{gap:4px 12px}}
 @media(prefers-reduced-motion:reduce){.studio-panel,.workbench-loading{animation:none}body.playground .studio-tool:hover{transform:none}}
+/* A chapter opens on its core tools; the rest are one press away. */
+body.playground .studio-more-tools{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin-top:12px;padding:10px 16px;border:1px dashed var(--studio-line);border-radius:13px;background:transparent;color:var(--text);font:inherit;font-weight:650;cursor:pointer}
+body.playground .studio-more-tools:hover{border-style:solid;background:var(--studio-card)}
+body.playground .studio-more-tools:focus-visible{outline:2px solid #68eaff;outline-offset:2px}
+html[data-contrast=more] body.playground .studio-more-tools{border-color:#c3c8d6;border-style:solid}

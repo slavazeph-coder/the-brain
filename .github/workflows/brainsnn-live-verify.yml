@@ -92,7 +92,7 @@ jobs:
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
           # The SPA shell carries the current BrainSNN product title. Checking it
-          # proves the World Builder homepage build rolled out, not merely that an
+          # proves the three-door homepage build rolled out, not merely that an
           # older container is still answering health checks.
           HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
           WORLD_URL: https://www.brainsnn.com/world/index.html
@@ -109,7 +109,7 @@ jobs:
             arena="$(curl -L -s -o /tmp/brainsnn-arena.html -w '%{http_code}' "$ARENA_URL" || true)"
             analysis="$(curl -L -s -o /tmp/brainsnn-analysis.json -w '%{http_code}' "$ANALYSIS_CAPABILITIES_URL" || true)"
             analysis_asset="$(curl -L -s -o /tmp/brainsnn-analysis.js -w '%{http_code}' "$ANALYSIS_ASSET_URL" || true)"
-            if [ "$home" = "200" ] && grep -Fq "BrainSNN | World Builder" /tmp/brainsnn-home.html && grep -Fq "world-builder-v1" /tmp/brainsnn-home.html && [ "$world" = "200" ] && grep -Fq "BrainSNN | World Builder" /tmp/brainsnn-world.html && grep -Fq "world-builder-v1" /tmp/brainsnn-world.html; then
+            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Walk a space, build its world" /tmp/brainsnn-home.html && grep -Fq "walk-world-api-v1" /tmp/brainsnn-home.html && [ "$world" = "200" ] && grep -Fq "BrainSNN | World Builder" /tmp/brainsnn-world.html && grep -Fq "world-builder-v1" /tmp/brainsnn-world.html; then
               home_marker="ok"
             else
               home_marker="missing"

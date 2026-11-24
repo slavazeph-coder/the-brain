@@ -55,8 +55,25 @@ describe('per-route social previews', () => {
     expect(play.body.join(' ')).toContain('not a recording of anyone’s brain');
   });
 
-  it('publishes World Builder for the root and world routes with source limitations', () => {
-    for (const path of ['/', '/world', '/world/']) {
+  it('publishes the three doors at the root with each door\'s limitation', () => {
+    const home = resolveRouteMeta('/');
+    expect(home.title).toContain('BrainSNN');
+    expect(home.heading).toBe('Map a space. Build its world. Test a robot in it.');
+    expect(home.positioning).toBe('walk-world-api-v1');
+    expect(home.body.join(' ')).toContain('shapes and distances are not measured');
+    expect(home.body.join(' ')).toContain('not physical robot execution');
+    expect(home.body.join(' ')).toContain('Access is by pilot key');
+    const block = renderContentBlock(home, '/');
+    for (const href of ['/walk/', '/world/', '/world/api.html', '/arena/', '/office', '/lab']) {
+      expect(block).toContain(`href="${href}"`);
+    }
+    expect(resolveRouteMeta('/').canonicalPath).toBe('/');
+    // A path nobody claimed still gets the homepage copy, under its own canonical URL.
+    expect(resolveRouteMeta('/not-a-page').positioning).toBe('walk-world-api-v1');
+  });
+
+  it('publishes World Builder at /world with source limitations', () => {
+    for (const path of ['/world', '/world/']) {
       const world = resolveRouteMeta(path);
       expect(world.title).toBe('BrainSNN | World Builder');
       expect(world.heading).toBe('World Builder Playground');
@@ -68,7 +85,8 @@ describe('per-route social previews', () => {
     expect(resolveRouteMeta('/world/').canonicalPath).toBe('/world');
     expect(resolveRouteMeta('/', '?classic=1').canonicalPath).toBe('/?classic=1');
     expect(resolveRouteMeta('/world', '?classic=1').title).toBe('BrainSNN | World Builder');
-    expect(applyRouteMeta(HTML, '/')).toContain('name="brainsnn-positioning" content="world-builder-v1"');
+    expect(applyRouteMeta(HTML, '/world')).toContain('name="brainsnn-positioning" content="world-builder-v1"');
+    expect(applyRouteMeta(HTML, '/')).toContain('name="brainsnn-positioning" content="walk-world-api-v1"');
     expect(applyRouteMeta(HTML, '/', '?classic=1')).toContain('name="brainsnn-positioning" content="robot-pricing-transparent-v1"');
   });
 
@@ -98,8 +116,18 @@ describe('per-route social previews', () => {
     expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/office"');
   });
 
+  it('gives the restored Creative Engine and Agent Lab their own pages with limits', () => {
+    const app = resolveRouteMeta('/app');
+    expect(app.title).toBe('BrainSNN | Creative Engine');
+    expect(app.body.join(' ')).toContain('not a measurement of a reader’s brain');
+    expect(resolveRouteMeta('/app/improve').title).toBe(app.title);
+    expect(resolveRouteMeta('/app/improve').canonicalPath).toBe('/app/improve');
+    expect(resolveRouteMeta('/agent-lab').title).toBe('Agent Lab | BrainSNN');
+    expect(renderContentBlock(app, '/app')).toContain('href="/app/compare"');
+  });
+
   it('resolves the former workbenches to the matching Review tabs', () => {
-    for (const [path, tab] of [['/app', 'passage'], ['/engine', 'drafts'], ['/reconstruct', 'claims']]) {
+    for (const [path, tab] of [['/engine', 'drafts'], ['/reconstruct', 'claims']]) {
       const legacy = resolveRouteMeta(path);
       expect(legacy).toEqual(resolveRouteMeta('/office', `?tab=${tab}`));
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
@@ -217,7 +245,7 @@ describe('content a crawler can read without running JavaScript', () => {
   });
 
   it('gives every major route a heading and real prose', () => {
-    for (const path of ['/', '/world', '/scan', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
+    for (const path of ['/', '/world', '/scan', '/office', '/arcade', '/lab', '/app', '/app/compare', '/agent-lab', '/engine', '/evidence', '/reconstruct']) {
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
       const heading = tagContent(html, '<h1[^>]*>([^<]*)</h1>');
       expect(heading.length).toBeGreaterThan(10);
@@ -243,11 +271,13 @@ describe('content a crawler can read without running JavaScript', () => {
     expect(html).toContain('href="/play"');
     expect(html).not.toContain('href="/lab"');
     const home = applyRouteMeta(HTML, '/', '', 'https://x.test');
-    for (const path of ['/arena/', '/office', '/evidence', '/lab']) expect(home).toContain(`href="${path}"`);
-    for (const path of ['/play', '/arcade', '/app', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
+    for (const path of ['/arena/', '/office', '/evidence', '/lab', '/app', '/agent-lab']) expect(home).toContain(`href="${path}"`);
+    for (const path of ['/play', '/arcade', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
     expect(home).toContain('<details><summary>More</summary>');
-    expect(home).toContain('href="/world/index.html"');
-    expect(home).toContain('href="/world/index.html#showcase"');
+    for (const path of ['/walk/', '/world/', '/world/api.html']) expect(home).toContain(`href="${path}"`);
+    const world = applyRouteMeta(HTML, '/world', '', 'https://x.test');
+    expect(world).toContain('href="/world/index.html"');
+    expect(world).toContain('href="/world/index.html#showcase"');
   });
 
   it('escapes prose rather than trusting it to be tag-free', () => {
@@ -270,7 +300,8 @@ describe('static application metadata', () => {
   it('brands the initial document as BrainSNN and gives structured data the served route description', () => {
     const template = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
     expect(template).not.toContain('Sapient Playground');
-    expect(template).toContain('<title>BrainSNN | World Builder</title>');
+    expect(template).toContain(`<title>${resolveRouteMeta('/').title}</title>`);
+    expect(template).toContain(`content="${resolveRouteMeta('/').description}"`);
     const html = applyRouteMeta(template, '/office', '?tab=video', 'https://www.brainsnn.com');
     const structured = JSON.parse(html.match(/<script id="site-schema" type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
     expect(structured.name).toBe('BrainSNN');

@@ -328,10 +328,15 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
   }
 
   let listed = [];
+  const expanded = new Set();
   function render() {
     const searching = openId === 'search';
     const chapter = chapters.find(entry => entry.id === openId);
-    listed = searching ? searchFeatures(searchableChapters, query) : chapter.features.map(feature => ({ chapter, feature }));
+    // A chapter opens on its core tools; "More tools" lists the rest in place. Search lists everything.
+    const collapsed = !searching && !expanded.has(chapter.id) && chapter.features.some(feature => feature.core);
+    listed = searching
+      ? searchFeatures(searchableChapters, query)
+      : chapter.features.filter(feature => !collapsed || feature.core).map(feature => ({ chapter, feature }));
     const header = document.createElement('div');
     header.className = 'studio-panel-head';
     if (searching) {
@@ -344,11 +349,26 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
     }
     header.querySelector('.studio-panel-count').textContent = searching
       ? (listed.length ? `${listed.length} of ${totalEntries} tools and guides` : 'No tool matches yet. Try another word.')
-      : `${listed.length} tools`;
+      : listed.length === chapter.features.length ? `${listed.length} tools` : `${listed.length} of ${chapter.features.length} tools`;
     const grid = document.createElement('div');
     grid.className = 'studio-tools';
     grid.append(...listed.map(card));
-    panel.replaceChildren(header, grid);
+    const parts = [header, grid];
+    if (!searching && listed.length < chapter.features.length) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'studio-more-tools';
+      more.id = 'studio-more-tools';
+      more.textContent = `More tools (${chapter.features.length - listed.length})`;
+      more.addEventListener('click', () => {
+        const first = listed.length;
+        expanded.add(chapter.id);
+        render();
+        panel.querySelectorAll('.studio-tool')[first]?.focus({ preventScroll: true });
+      });
+      parts.push(more);
+    }
+    panel.replaceChildren(...parts);
     panel.setAttribute('aria-label', searching ? 'Find a tool' : chapter.label + ' tools');
     if (searching) {
       const input = panel.querySelector('#studio-search');

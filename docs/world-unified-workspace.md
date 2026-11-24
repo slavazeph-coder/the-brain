@@ -1,6 +1,7 @@
 # One World Builder workspace
 
-The homepage opens the editable World Builder playground. Use the practice
+`/world/` opens the editable World Builder playground (the homepage `/` is three doors: Walk, World Builder, API;
+see [front-door.md](front-door.md)). Use the practice
 room, add your own files, or follow the captioned v23 walkthrough. Capture,
 model review, drawings, robot routes and saved results share the project.
 

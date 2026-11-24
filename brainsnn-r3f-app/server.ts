@@ -1260,6 +1260,11 @@ export async function startServer() {
     // the same generic card. Social scrapers do not run JavaScript, so the
     // client cannot fix this — the tags have to be right in the HTML we send.
     const indexHtml = readFileSync(path.join(distPath, "index.html"), "utf8");
+    // An API path nobody handled is a client error, not a page: answer JSON 404 rather
+    // than the SPA's HTML with a 200, which callers would try to parse as data.
+    app.all(["/api", "/api/*"], (req, res) => {
+      res.status(404).json({ error: "Not found.", path: req.originalUrl.split("?")[0] });
+    });
     app.get("*", (req, res) => {
       const [pathname, search = ""] = req.originalUrl.split("?");
       const origin = APP_URL.replace(/\/$/, "");

@@ -46,12 +46,18 @@ export function BrainVisualizer({ result }) {
     function resize() {
       const rect = wrap.getBoundingClientRect();
       const ratio = Math.min(window.devicePixelRatio || 1, 1.75);
-      width = Math.max(320, Math.floor(rect.width));
-      height = Math.max(260, Math.floor(rect.height));
-      canvas.width = Math.floor(width * ratio);
-      canvas.height = Math.floor(height * ratio);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      const nextWidth = Math.max(320, Math.floor(rect.width));
+      const nextHeight = Math.max(260, Math.floor(rect.height));
+      const backingWidth = Math.floor(nextWidth * ratio);
+      const backingHeight = Math.floor(nextHeight * ratio);
+      if (nextWidth === width && nextHeight === height && canvas.width === backingWidth && canvas.height === backingHeight) return;
+      width = nextWidth;
+      height = nextHeight;
+      // Size only the drawing buffer. CSS gives the canvas 100% of its wrapper; writing a pixel size here
+      // fed the canvas width back into its grid column, which resized the wrapper and re-fired this
+      // observer in the same frame ("ResizeObserver loop completed with undelivered notifications").
+      canvas.width = backingWidth;
+      canvas.height = backingHeight;
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       renderFrame(false);
     }

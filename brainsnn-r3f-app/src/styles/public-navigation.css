@@ -41,5 +41,14 @@
 .world-footer nav a{font-size:.72rem;color:#9eafc0!important}
 .world-footer nav a:hover{color:#e5fdff!important}
 @media(max-width:1010px){.bh-nav.public-nav{gap:13px}.bh-nav.public-nav nav{gap:12px}.bh-nav.public-nav nav a{font-size:.68rem}.bh-nav.public-nav .world-nav-cta{gap:6px;padding:10px 11px}}
-@media(max-width:720px){.bh-nav.public-nav{flex-wrap:wrap}.bh-nav.public-nav nav{order:2;flex:1 1 100%;justify-content:space-between;gap:12px;border-top:1px solid rgba(255,255,255,.06);padding-top:10px}.bh-nav.public-nav .world-nav-cta{margin-left:auto}.bh-nav.public-nav nav a:nth-of-type(2),.bh-nav.public-nav nav a:nth-of-type(4){display:none}.bh-nav.public-nav nav a{font-size:.74rem}.world-footer{align-items:flex-start}}
+@media(max-width:720px){.bh-nav.public-nav{flex-wrap:wrap}.bh-nav.public-nav nav{order:2;flex:1 1 100%;justify-content:space-between;gap:12px;border-top:1px solid rgba(255,255,255,.06);padding-top:10px}.bh-nav.public-nav .world-nav-cta{margin-left:auto}.bh-nav.public-nav nav a{font-size:.74rem}.world-footer{align-items:flex-start}}
 @media(max-width:430px){.bh-nav.public-nav .world-nav-cta{font-size:.66rem;padding:10px 9px}.bh-nav.public-nav .world-nav-cta svg:last-child{display:none}.world-footer nav{gap:12px 18px}}
+
+/* Tap targets: every header and footer link is at least 44px tall (WCAG 2.5.8 asks for 24px; 44 suits thumbs).
+   The audit found the menu links at 18px. Height comes from padding, so the visual rhythm does not change. */
+.bh-nav.public-nav .bh-brand{min-height:44px}
+.bh-nav.public-nav nav a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 2px}
+.public-overflow summary{display:flex;align-items:center;min-height:44px;padding:0 2px}
+.public-overflow > div a{min-height:44px;display:flex;align-items:center}
+.world-footer nav a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px}
+.world-footer-brand{display:inline-flex;align-items:center;min-height:44px}

@@ -48,7 +48,7 @@ bridge (`/api/world/v1/processing`). The text-analysis endpoints are not it.
 3. No billing for the API: keys are CLI-provisioned, `/usage` is admission
    accounting, not invoicing. For first customers, invoice manually.
 4. Production database backups were a stated launch precondition; not verified.
-5. `VITE_GEMINI_API_KEY` is set on Railway but nothing reads it — delete it.
+5. `VITE_GEMINI_API_KEY` is set on Railway. **Correction Nov 23:** `GEMINI_API_KEY` references it and the server reads that, so do not delete it as-is; move the value into `GEMINI_API_KEY` first (dashboard).
 6. Builds download MoveNet from kaggle.com on every clean build; a kaggle outage
    blocks deploys. **Fixed Nov 23:** the build now falls back to `MOVENET_MIRROR` and then to the copy brainsnn.com serves, enforcing the same pinned SHA-256s.
 

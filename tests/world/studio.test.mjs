@@ -79,3 +79,16 @@ test('the playground page carries the studio, its workbench and the offline shel
   // No visible studio text below the playground's 13 px floor.
   for (const [, size] of css.matchAll(/font(?:-size)?:[^;}]*?\b(\d+(?:\.\d+)?)px/gu)) assert.ok(Number(size) >= 13, size + 'px');
 });
+
+test('each chapter opens on two core tools, a dozen in all, and every core name is a real tool', async () => {
+  const { coreTools } = await import('../../brainsnn-r3f-app/public/world/showcase-features.mjs');
+  assert.deepEqual(Object.keys(coreTools).sort(), chapters.map(chapter => chapter.id).sort());
+  for (const chapter of chapters) {
+    const core = chapter.features.filter(feature => feature.core).map(feature => feature.label);
+    assert.deepEqual(core.sort(), [...coreTools[chapter.id]].sort(), chapter.id);
+    assert.equal(core.length, 2, chapter.id);
+  }
+  assert.equal(features.filter(feature => feature.core).length, 12);
+  // Search ignores the split: every tool stays findable.
+  assert.equal(searchFeatures(chapters, '').length, features.length);
+});

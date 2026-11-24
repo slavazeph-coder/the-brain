@@ -1,7 +1,7 @@
 import React from 'react';
-import { BrainCircuit, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, BrainCircuit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { IconButton } from '../components/ui/IconButton.jsx';
-import { NAV_ITEMS, OVERFLOW_ITEMS } from './navigation.js';
+import { ANALYZER_ITEMS, ANALYZER_MORE_ITEMS } from '../features/analyzer/analyzerNavigation.js';
 
 
 function NavButton({ item, active, collapsed, onNavigate }) {
@@ -14,7 +14,7 @@ function NavButton({ item, active, collapsed, onNavigate }) {
 }
 
 export function DesktopSidebar({ active, onNavigate, collapsed, onToggle }) {
-  const workflowItems = NAV_ITEMS;
+  const workflowItems = [...ANALYZER_ITEMS, ...ANALYZER_MORE_ITEMS];
   return (
     <aside className={`desktop-sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Primary navigation">
       <div className="sidebar-brand">
@@ -22,7 +22,7 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle }) {
         {!collapsed ? (
           <span>
             <strong>BrainSNN</strong>
-            <small>Robot policy testing</small>
+            <small>Creative Engine</small>
           </span>
         ) : null}
       </div>
@@ -32,7 +32,7 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle }) {
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <details><summary aria-label="More navigation">More</summary>{OVERFLOW_ITEMS.map((item) => <NavButton key={item.id} item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />)}</details>
+        <a className="sidebar-site-link" href="/" aria-label="BrainSNN home"><ArrowLeft size={16} aria-hidden="true" />{!collapsed ? <span>BrainSNN home</span> : null}</a>
         <IconButton label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={onToggle}>
           {collapsed ? <ChevronRight size={18} aria-hidden="true" /> : <ChevronLeft size={18} aria-hidden="true" />}
         </IconButton>

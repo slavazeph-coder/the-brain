@@ -19,13 +19,13 @@ function LayerExplorer() {
         <span className="bsn-mono">{layers.length} shown</span>
       </div>
       <div className="layer-explorer-controls">
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search layer, group or number..." />
-        <select value={group} onChange={(event) => setGroup(event.target.value)}>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search layer, group or number..." aria-label="Search layers" />
+        <select value={group} onChange={(event) => setGroup(event.target.value)} aria-label="Filter by layer group">
           <option value="all">All groups</option>
           {Object.entries(LAYER_GROUPS).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
         </select>
       </div>
-      <div className="layer-explorer-list">
+      <div className="layer-explorer-list" tabIndex={0} role="region" aria-label={`${layers.length} layers`}>
         {layers.map((layer) => {
           const meta = LAYER_GROUPS[layer.group] || {};
           return (

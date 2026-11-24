@@ -31,3 +31,23 @@ export function worldDocumentSource(search = '', hash = '') {
   const query = output.toString();
   return '/world/index.html' + (query ? '?' + query : '') + publicWorldFragment(hash);
 }
+
+// Query keys that only World Builder reads. Links shared while World Builder was
+// the homepage (`/?sandbox=street`, `/#showcase`) must keep opening it.
+const WORLD_QUERY_KEYS = ['sandbox', 'scene', 'tool', 'install'];
+
+/**
+ * Which top-level surface serves this address:
+ * - 'home': the three-door front page at `/`
+ * - 'world': World Builder (`/world`, plus old World Builder links to `/`)
+ * - 'shell': every other React route, including the classic lobby `/?classic=1`
+ */
+export function appRoute(pathname = '/', search = '', hash = '') {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (path === '/world') return 'world';
+  if (path !== '/') return 'shell';
+  const params = new URLSearchParams(search);
+  if (params.get('classic') === '1') return 'shell';
+  if (WORLD_QUERY_KEYS.some(key => params.has(key)) || publicWorldFragment(hash)) return 'world';
+  return 'home';
+}

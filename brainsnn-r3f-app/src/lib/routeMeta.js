@@ -27,7 +27,6 @@ const REVIEW_TABS = {
 };
 
 const LEGACY_ROUTES = {
-  '/app': { path: '/office', tab: 'passage' },
   '/engine': { path: '/office', tab: 'drafts' },
   '/reconstruct': { path: '/office', tab: 'claims' },
   '/missions': { path: '/arena/' },
@@ -57,6 +56,48 @@ const WORLD = {
     'Open the practice room to move objects and try a robot. Find a tool brings together scans, drawings, robot activities and saved projects.',
     'Single-photo depth and generative previews do not establish metric scale or hidden geometry. Review independent measurements, obstacles and unknown areas before planning.',
     'Robot routes and operating-cost estimates use the reviewed map and your assumptions. They are planning previews, not physical robot execution or safety certification.',
+  ],
+};
+
+// The Creative Engine at /app (restored Nov 2026): the server-backed scan and its sections.
+const ANALYZER = {
+  title: 'BrainSNN | Creative Engine',
+  description: 'Scan a draft for attention, trust and pressure signals, improve it, compare two versions and keep a history. Scores are heuristic signals, not a measurement of anyone’s brain.',
+  heading: 'Know how a draft lands before you publish it.',
+  body: [
+    'Paste a post, ad, email or script. The Creative Engine scores attention, trust and pressure, shows which words drive each score, and suggests the next fix. Improve applies fixes you choose; Compare scores two versions side by side.',
+    'Results include the cognitive firewall, affect and the 39 Hz soliton field from the 103-layer stack, with each layer’s inputs on the page. History and approvals stay in this browser.',
+    'Scores are heuristic review signals from text features. They are not a measurement of a reader’s brain and do not predict reach, sales or behaviour.',
+  ],
+  links: [{ path: '/app/compare', label: 'Compare two drafts' }, { path: '/app/research', label: 'Research layers' }, { path: '/office', label: 'Review' }],
+};
+
+const AGENT_LAB = {
+  title: 'Agent Lab | BrainSNN',
+  description: 'How BrainSNN analyzes, improves and tests agent work: the engine, its evidence, recorded work and a replay of real events.',
+  heading: 'An evidence engine for agent work.',
+  body: [
+    'Agent Lab shows the BrainSNN workflow for agent work: analyze a task, improve the draft, test it, and keep the evidence.',
+    'Recorded work and the replay come from the live summary when it is available. When it is not, the page says so instead of showing sample numbers as real.',
+  ],
+  links: [{ path: '/app', label: 'Creative Engine' }, { path: '/evidence', label: 'Evidence' }],
+};
+
+// The homepage: three doors (Walk, World Builder, API). Unknown paths fall back to it.
+const HOME = {
+  positioning: 'walk-world-api-v1',
+  title: 'BrainSNN | Walk a space, build its world, test a robot',
+  description: 'Map a space with your phone in BrainSNN Walk, open it as an editable 3D world in World Builder, or call the same pipeline through the API.',
+  heading: 'Map a space. Build its world. Test a robot in it.',
+  body: [
+    'Walk: walk a space with your phone and tap features as you pass them. Export GeoPackage, GPX or CSV. Map position comes from the phone’s own GPS accuracy; shapes and distances are not measured.',
+    'World Builder: turn a walk video, photos or a scan into an editable 3D world, move objects and try a robot route. Scale stays unverified until you check a known length, and robot routes are planning previews, not physical robot execution.',
+    'API: send captures to the reconstruction worker from your own code, then fetch jobs and artifacts, with limits and usage per key. Access is by pilot key.',
+  ],
+  primaryLinks: [
+    { path: '/walk/', label: 'Walk' },
+    { path: '/world/', label: 'World Builder' },
+    { path: '/world/api.html', label: 'API' },
   ],
 };
 
@@ -215,8 +256,10 @@ const ROUTES = [
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
     ],
   },
+  { path: '/app', ...ANALYZER },
+  { path: '/agent-lab', ...AGENT_LAB },
   { path: '/world', ...WORLD },
-  { path: '/', ...WORLD },
+  { path: '/', ...HOME },
 ];
 
 const CRAWL_LINKS = Object.freeze([
@@ -298,17 +341,20 @@ export function renderContentBlock(meta, currentPath = '/') {
     .map((link) => `<li style="margin:0 0 .5rem"><a href="${escapeAttribute(link.path)}" style="color:#7dd3fc">${escapeAttribute(link.label)}</a></li>`)
     .join('');
   const playground = meta.positioning === WORLD.positioning;
-  const links = renderLinks(playground ? [
+  const primary = meta.primaryLinks || (playground ? [
     { path: '/world/index.html', label: 'Open the playground' },
     { path: '/world/index.html#showcase', label: 'Watch the walkthrough' },
   ] : CRAWL_LINKS);
+  const links = renderLinks(primary);
   const experiments = meta.links
     ? `<section aria-label="Lab experiments"><ul>${renderLinks(meta.links)}</ul></section>`
     : '';
   const overflow = '<details><summary>More</summary><ul>' + renderLinks([
-    ...(playground ? CRAWL_LINKS : []),
+    ...(primary === CRAWL_LINKS ? [] : CRAWL_LINKS),
+    { path: '/app', label: 'Creative Engine' },
     { path: '/office', label: 'Review' },
     { path: '/evidence', label: 'Evidence' },
+    { path: '/agent-lab', label: 'Agent Lab' },
     { path: '/lab', label: 'Lab' },
   ]) + '</ul></details>';
 

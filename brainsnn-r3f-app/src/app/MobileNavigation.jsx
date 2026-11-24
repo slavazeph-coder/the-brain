@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Ellipsis } from 'lucide-react';
-import { NAV_ITEMS, OVERFLOW_ITEMS } from './navigation.js';
-const mobileItems = [...NAV_ITEMS, { id: 'more', label: 'More', icon: Ellipsis }];
-const moreItems = OVERFLOW_ITEMS;
+import { ANALYZER_ITEMS, ANALYZER_MORE_ITEMS } from '../features/analyzer/analyzerNavigation.js';
+const mobileItems = [...ANALYZER_ITEMS, { id: 'more', label: 'More', icon: Ellipsis }];
+const moreItems = ANALYZER_MORE_ITEMS;
 
 const moreIds = moreItems.map((item) => item.id);
 
@@ -51,7 +51,7 @@ export function MobileNavigation({ active, onNavigate }) {
               onClick={() => (isMore ? setMoreOpen((value) => !value) : navigate(item.id))}
             >
               <item.icon size={18} aria-hidden="true" />
-              {item.label}
+              {item.mobileLabel || item.label}
             </button>
           );
         })}

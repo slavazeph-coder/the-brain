@@ -3,9 +3,8 @@ export function legacyRedirect(pathname, search = '') {
   const path = pathname.replace(/\/+$/, '') || '/';
   const query = new URLSearchParams(search);
   let target;
-  if (path === '/app' || path.startsWith('/app/')) {
-    query.set('tab', 'passage'); target = '/office';
-  } else if (path === '/engine' || path.startsWith('/engine/')) {
+  // /app is the Creative Engine again (restored Nov 2026); it no longer redirects to Review.
+  if (path === '/engine' || path.startsWith('/engine/')) {
     query.set('tab', 'drafts'); target = '/office';
   } else if (path === '/reconstruct' || path.startsWith('/reconstruct/')) {
     query.set('tab', 'claims'); target = '/office';

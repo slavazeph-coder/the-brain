@@ -245,6 +245,8 @@ jobs:
           done
           curl -fsS http://127.0.0.1:4180/healthz >/dev/null
           python tests/world/browser_smoke.py
+          # Every BrainSNN layer stays reachable: routes, the Creative Engine scan-to-approval flow and its APIs.
+          python tests/world/layers_browser_smoke.py
           WORLD_URL=http://127.0.0.1:4180/world/index.html python tests/world/playground_help_browser_smoke.py
           # Robot-first setup: robot and world cards, Let it try, camera buttons, tap-to-choose, undo/redo, contrast, phone sizes.
           WORLD_URL=http://127.0.0.1:4180/world/index.html python tests/world/robot_setup_browser_smoke.py
