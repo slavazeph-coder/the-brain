@@ -93,6 +93,38 @@ def check_routes(browser):
         context.close()
 
 
+PHONE_BASICS_JS = """() => {
+  const small = [];
+  for (const el of document.querySelectorAll('a[href],button,select,textarea,summary,[role=button]')) {
+    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+    if (!r.width || !r.height || s.visibility === 'hidden') continue;
+    if (el.tagName === 'A' && el.closest('p,li') && s.display === 'inline') continue;  // WCAG 2.5.8 inline exception
+    if (r.width < 24 || r.height < 24) small.push(`${el.tagName} "${(el.innerText || '').trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+  }
+  let tiny = 0;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const el = walker.currentNode.parentElement;
+    if (!walker.currentNode.textContent.trim() || !el || el.closest('svg,canvas,[aria-hidden=true]')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height && parseFloat(getComputedStyle(el).fontSize) < 10) tiny++;
+  }
+  return { small, tiny };
+}"""
+
+
+def check_phone_basics(browser):
+    """Nov 24 UI audit: menu links were 18px tall and Agent Lab text went down to 6.5px. Keep them fixed."""
+    context = browser.new_context(viewport={'width': 390, 'height': 844}, has_touch=True, is_mobile=True)
+    page = context.new_page()
+    for route in ('/', '/office', '/lab', '/agent-lab'):
+        page.goto(BASE + route, wait_until='networkidle')
+        found = page.evaluate(PHONE_BASICS_JS)
+        assert not found['small'], f'{route}: tap targets under 24px: {found["small"][:5]}'
+        assert found['tiny'] == 0, f'{route}: {found["tiny"]} text elements under 10px'
+    context.close()
+
+
 def check_creative_engine(browser, mobile):
     context = browser.new_context(viewport={'width': 390, 'height': 844} if mobile else {'width': 1366, 'height': 900},
                                   has_touch=mobile, is_mobile=mobile)
@@ -108,6 +140,17 @@ def check_creative_engine(browser, mobile):
     page.locator('.scan-actions button').last.click()
     save = page.get_by_role('button', name=re.compile('Save to History')).first
     save.wait_for(timeout=30000)
+    # The verdict says each thing once, and its next step is on the first screen, phone included.
+    # The app smooth-scrolls the results into view after a scan; measure once that has settled.
+    page.wait_for_function("Math.abs(document.querySelector('.executive-verdict').getBoundingClientRect().top) < 240")
+    page.wait_for_timeout(300)
+    verdict = page.locator('.executive-verdict')
+    headline = verdict.locator('h2').inner_text().strip()
+    assert not verdict.locator('h2 + p').inner_text().strip().startswith(headline), 'Verdict repeats its headline'
+    assert verdict.locator('.verdict-label-row').count() == 1 and page.get_by_text('Deterministic local result', exact=True).count() <= 1
+    next_step = page.get_by_role('button', name=re.compile('Fix this draft|Improve this draft')).first
+    box = next_step.bounding_box()
+    assert box and box['y'] + box['height'] <= page.viewport_size['height'], f'Next step below the first screen: {box}'
     works = page.locator('#analyzer-main').inner_text()
     assert 'Join 5,000 marketers' in works
     assert not re.search(r'Limited spots left!.{0,4} is the strongest attention signal', works), 'What works praised scarcity'
@@ -154,6 +197,7 @@ if __name__ == '__main__':
             executable = os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
             browser = getattr(playwright, name).launch(headless=True, **({'executable_path': executable} if name == 'chromium' and executable else {}))
             check_routes(browser)
+            check_phone_basics(browser)
             check_creative_engine(browser, mobile=False)
             check_creative_engine(browser, mobile=True)
             browser.close()

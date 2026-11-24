@@ -27,6 +27,17 @@ export function getBusinessMetrics(result = {}) {
   ];
 }
 
+/**
+ * The line under the verdict headline. The scan summary is often "<headline>: <rationale>", and the
+ * rationale is also "What hurts", so the raw summary said the same thing up to three times.
+ */
+function verdictInterpretation(result, headline, primaryRisk) {
+  let text = String(result.summary || '').trim();
+  if (headline && text.toLowerCase().startsWith(`${headline.toLowerCase()}:`)) text = text.slice(headline.length + 1).trim();
+  if (!text || text === primaryRisk) text = String(result.riskDescription || '').trim();
+  return text === headline ? '' : text;
+}
+
 export function deriveExecutiveVerdict(result = {}) {
   const metrics = getBusinessMetrics(result);
   const byId = Object.fromEntries(metrics.map((metric) => [metric.id, metric]));
@@ -72,7 +83,7 @@ export function deriveExecutiveVerdict(result = {}) {
     score,
     viralScore,
     viralLabel,
-    interpretation: result.summary || 'AI-estimated response signals for this content.',
+    interpretation: verdictInterpretation(result, headline, primaryRisk),
     primaryStrength,
     primaryRisk,
     bestNextMove,

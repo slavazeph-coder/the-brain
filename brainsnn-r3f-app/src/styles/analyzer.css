@@ -11,3 +11,17 @@
 .analyzer-notice-success { border-color: rgba(52, 211, 153, .45); background: rgba(52, 211, 153, .1); }
 .analyzer-notice button { margin-left: auto; padding: 6px 12px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: .8rem; cursor: pointer; }
 @media (max-width: 760px) { .analyzer-notice { margin: 12px 12px 0; } }
+
+/* The next step sits under the verdict wherever the action rail has dropped below the results. */
+.results-next-inline { display: none; }
+@media (max-width: 1180px) {
+  .results-next-inline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0 4px; padding: 14px 16px; border: 1px solid rgba(0, 245, 255, .25); border-radius: 14px; background: rgba(0, 245, 255, .05); }
+  .results-next-inline p { margin: 0; flex: 1 1 240px; color: #dbe6f2; line-height: 1.5; }
+  .results-next-inline button { flex: 0 0 auto; }
+  .results-inspector .inspector-next { display: none; }
+}
+/* Phones: the two score circles sit side by side instead of stacking, so the verdict and its next step fit the first screen. */
+@media (max-width: 640px) {
+  .executive-verdict .verdict-score-row { flex-direction: row; justify-self: start; align-self: start; }
+  .executive-verdict .verdict-score-row .verdict-score { width: 104px; }
+}

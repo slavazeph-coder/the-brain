@@ -109,7 +109,18 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
             <ClientMultimodalBrief result={result} media={media} />
           </>
         ) : (
-          <ExecutiveVerdict result={result} />
+          // Below 1180px the action rail drops beneath every panel; the next step sits under the verdict sentence.
+          <ExecutiveVerdict
+            result={result}
+            action={(
+              <div className="results-next-inline">
+                <p>{fixCount > 0 ? <><strong>{fixCount} fix{fixCount === 1 ? '' : 'es'}</strong> can be applied to this draft right now.</> : verdict.bestNextMove}</p>
+                <Button variant="primary" onClick={() => onImprove(result)}>
+                  <Sparkles size={16} aria-hidden="true" /> {fixCount > 0 ? `Fix this draft (${fixCount})` : 'Improve this draft'}
+                </Button>
+              </div>
+            )}
+          />
         )}
         <ResultsTabs active={tab} onChange={selectTab} />
         <TabPanel id="overview" active={tab}>
@@ -157,8 +168,6 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
           </>
         ) : (
           <>
-            <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Deterministic local result' : 'AI-estimated response'}</Badge>
-
             {/* The actionable thing goes first. It used to sit below four
                 scorecards and above five competing buttons, which is a rail that
                 reads as "here are your options" rather than "here is the next

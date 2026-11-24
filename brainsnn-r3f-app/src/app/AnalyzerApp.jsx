@@ -21,7 +21,7 @@ import { CommandPalette } from './CommandPalette.jsx';
 import '../styles/analyzer.css';
 
 const SECTION_ITEMS = [...ANALYZER_ITEMS, ...ANALYZER_MORE_ITEMS];
-const PALETTE_ITEMS = [...SECTION_ITEMS, ...NAV_ITEMS, ...OVERFLOW_ITEMS.filter((item) => item.id !== 'creative-engine')];
+const PALETTE_ITEMS = [...SECTION_ITEMS, ...[...NAV_ITEMS, ...OVERFLOW_ITEMS].filter((item) => item.id !== 'creative-engine')];
 const SECTION_IDS = new Set(SECTION_ITEMS.map((item) => item.id));
 
 function makeQueueItem(result, content, comparison, status = 'Draft') {

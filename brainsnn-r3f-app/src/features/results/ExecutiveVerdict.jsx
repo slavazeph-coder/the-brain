@@ -4,7 +4,7 @@ import { Badge } from '../../components/ui/Badge.jsx';
 import { Tooltip } from '../../components/ui/Tooltip.jsx';
 import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 
-export function ExecutiveVerdict({ result }) {
+export function ExecutiveVerdict({ result, action = null }) {
   const verdict = deriveExecutiveVerdict(result);
   return (
     <section className="executive-verdict" aria-labelledby="executive-verdict-heading">
@@ -21,7 +21,8 @@ export function ExecutiveVerdict({ result }) {
           ) : null}
         </div>
         <h2 id="executive-verdict-heading">{verdict.headline}</h2>
-        <p>{verdict.interpretation}</p>
+        {verdict.interpretation ? <p>{verdict.interpretation}</p> : null}
+        {action}
       </div>
       <div className="verdict-score-row">
         <div className="verdict-score" aria-label={`Decision score ${verdict.score} out of 100`}>

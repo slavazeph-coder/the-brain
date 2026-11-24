@@ -165,7 +165,7 @@ def check_front_door(page, base):
     assert [doors.nth(i).get_attribute('href') for i in range(doors.count())]==['/walk/','/world/','/world/api.html']
     for i in range(3):assert doors.nth(i).locator('.fd-door-limit').inner_text().strip(),'Each door states its limitation'
     nav=page.get_by_role('navigation',name='Main navigation',exact=True)
-    assert [a.inner_text() for a in nav.locator(':scope > a').all()]==['World Builder','API','Lab']
+    assert [a.inner_text() for a in nav.locator(':scope > a').all()]==['World Builder','Creative Engine','API','Lab']
     assert all(a.is_visible() for a in nav.locator(':scope > a').all()),'Every primary link stays visible on a phone'
     assert page.locator('header .world-nav-cta').get_attribute('href')=='/walk/'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1'),'The homepage must not scroll sideways'

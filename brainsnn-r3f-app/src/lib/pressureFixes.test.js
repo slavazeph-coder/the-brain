@@ -42,3 +42,21 @@ describe('pressure the Creative Engine used to miss', () => {
     expect(reorder.recommendations[0].id).toBe('move-proof-to-ask');
   });
 });
+
+describe('the verdict says each thing once', () => {
+  it('does not repeat the headline or What hurts in the line under the headline', async () => {
+    const { deriveExecutiveVerdict } = await import('./scoreMapping.js');
+    const verdict = deriveExecutiveVerdict(analyzeContentLocally({ content: PRESSURE_AD }));
+    expect(verdict.interpretation.startsWith(verdict.headline)).toBe(false);
+    expect(verdict.interpretation).not.toBe(verdict.primaryRisk);
+    expect(verdict.interpretation.length).toBeGreaterThan(10);
+  });
+
+  it('never calls a draft low risk when this scan flags most of its lines as pressure', () => {
+    const result = analyzeContentLocally({ content: PRESSURE_AD });
+    expect(result.riskRating).toBe('Moderate trust risk');
+    expect(result.riskDescription).not.toContain('unlikely to feel manipulative');
+    const honest = analyzeContentLocally({ content: 'We cut onboarding from 3 days to 4 hours for 12 teams. Here is how we measured it, and what we still do not know.' });
+    expect(honest.riskRating).toBe('Low trust risk');
+  });
+});

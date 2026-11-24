@@ -40,7 +40,6 @@ const DOORS = [
 ];
 
 const MORE = [
-  { href: '/app', label: 'Creative Engine' },
   { href: '/agent-lab', label: 'Agent Lab' },
   { href: '/arena/', label: 'Robot Arena' },
   { href: '/scan', label: 'Capture studio' },

@@ -73,3 +73,29 @@ Still unmounted, and not wired anywhere:
 - `BenchmarksTable.tsx`.
 - `coherenceRequest.js`, the pilot mailto.
 - `evalMetrics.js` and `agreement.js`, which only tests use.
+
+## UI audit, Nov 24
+
+The audit used scripted visitor tasks and page checks against the production build (Chromium; the phone runs used 4x CPU
+throttling). It had no real users: production had logged 2 events, so this is a proxy, not usage data.
+
+| Measure | Before | After |
+| --- | --- | --- |
+| "Check my ad copy" reachable without scrolling (phone, desktop) | no, no | yes, yes |
+| Tap targets under 24px across 10 pages (phone) | 64 | 9 (Robot Arena 3, World Builder checkboxes 4, one link each on Evidence and the API page) |
+| Text under 10px (phone) | 75 (Agent Lab 67, down to 6.5px) | 8 (all Robot Arena) |
+| API page accessibility violations | 1 (code blocks not keyboard-scrollable) | 0 |
+| API page menu | old menu; "World Builder" linked to the homepage | current menu; Lab no longer hidden on phones |
+| Results: repeated headline, duplicate badge | yes, yes | no, no |
+| Results: next step on the first phone screen | no | yes |
+| Pressure ad rated | "Low trust risk" (contradicting its own line flags) | "Moderate trust risk" (calibration Spearman 0.884 -> 0.883) |
+
+Not done:
+- Robot Arena: tiny text, small targets and about 2s to show its main content on a throttled phone. It is a separate app with
+  its own contract tests.
+- One shared header and colour set across World Builder, Walk, the Creative Engine and Agent Lab: still four looks.
+
+`tests/world/layers_browser_smoke.py` now also fails on:
+- tap targets under 24px, or text under 10px, on the homepage, Review, Lab and Agent Lab
+- a verdict that repeats itself
+- a next step that is off the first screen

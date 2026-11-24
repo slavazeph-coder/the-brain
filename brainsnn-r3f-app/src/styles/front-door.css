@@ -34,7 +34,7 @@
 .fd-flow { margin: 22px 0 0; color: #8492a5; font-size: .82rem; line-height: 1.55; }
 .fd-more { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--bh-line); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; font-size: .82rem; }
 .fd-more span { color: #677589; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; }
-.fd-more a { color: #aeb8c6; padding: 6px 0; }
+.fd-more a { color: #aeb8c6; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
 .fd-more a:hover { color: #fff; }
 
 @media (max-width: 900px) {

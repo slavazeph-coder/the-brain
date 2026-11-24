@@ -62,3 +62,15 @@ What was restored:
 Production config, from `/api/engines/status`: Gemini and the GPU worker are configured; Stripe and Supabase are not.
 Production runs the app `railway.toml` with the preloads (brand-brain, missions and sponsorship are live). The repo-root
 `railway.toml` lacks those preloads; it is misleading but unused.
+
+## UI test and improve, Nov 24 (owner: "Test then improve")
+
+- **Audit and results:** `docs/front-door.md` has the before/after table.
+  - The scratch audit scripts were not committed. The permanent guards live in `layers_browser_smoke.py`.
+- **Creative Engine:** it is in the primary nav now (World Builder, Creative Engine, API, Lab, plus the Walk button).
+  - The 3-vs-4 homepage doors question is still open for the owner.
+- **Engine change:** in `analysisEngine.js`, the gaugeGap score is floored at 80 x the share of lines this scan flags as
+  pressure. Without it, a pressure-heavy ad read as "Low trust risk". The calibration guard still passes (0.883).
+- **Next:**
+  - Robot Arena legibility and speed.
+  - One shared header and set of design tokens across the apps.
