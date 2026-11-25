@@ -50,4 +50,13 @@ export function mountWaitlist(form, { fetchImpl = globalThis.fetch } = {}) {
   });
 }
 
-if (typeof document !== 'undefined') mountWaitlist(document.getElementById('waitlist-form'));
+if (typeof document !== 'undefined') {
+  mountWaitlist(document.getElementById('waitlist-form'));
+  // "Request a site pilot" lands on the same form with the scan-to-sim use case chosen.
+  for (const link of document.querySelectorAll('[data-pilot-request]')) {
+    link.addEventListener('click', () => {
+      const select = document.querySelector('#waitlist-form select[name="use_case"]');
+      if (select && !select.value) select.value = 'scan-to-sim';
+    });
+  }
+}

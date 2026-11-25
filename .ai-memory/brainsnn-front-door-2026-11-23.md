@@ -74,3 +74,20 @@ Production runs the app `railway.toml` with the preloads (brand-brain, missions 
 - **Next:**
   - Robot Arena legibility and speed.
   - One shared header and set of design tokens across the apps.
+
+## Nov 24-25: research verdict, #338 merged and live, pilot kit
+
+- **Research:** `docs/research/brainsnn-best-next-move-2026-11-24.md`. The verdict is to sell one paid, fixed-fee
+  "site-to-sim" pilot of the World Builder API to mobile-robot deployers in 30 days. "Merge all into one" lost as the main
+  move: only its cheap part, merging #338, was done.
+- **#338:** merged as `bd669f45` on the owner's "Next all" and live on www.brainsnn.com (`/`, `/app`, `/agent-lab`,
+  JSON 404 for unknown APIs).
+- **Pilot kit (`docs/sales/`):** offer + SOW + acceptance + restore drill (`site-to-sim-pilot.md`), owner-only steps
+  (`owner-week1.md`), templates (`outreach.md`), and a 40-row seed list to verify (`targets.csv`). The offer is on
+  `/world/api.html`.
+- **Bare domain:** `brainsnn.com/` 301s, but deep links 404 from the registrar forwarder (AWS). Railway has the domain
+  verified and needs an apex CNAME/ALIAS to `tnoamdbj.up.railway.app`. Owner action.
+- **Postgres backups:** no schedule is visible in the volume config, and no tool lists backups. Railway's Backups-tab
+  restore overwrites production in place; use the separate-service drill instead.
+- **Exposed key:** the "exposed key" is an Anthropic key pasted in chat, not in the repo; rotation is an owner action.
+  `docs/DEMO_SCRIPT.md` has only a fake demo key.
