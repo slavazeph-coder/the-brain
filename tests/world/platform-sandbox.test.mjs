@@ -70,6 +70,20 @@ async function workflow({ baseUrl, fetchImpl, tokens }) {
   await step('verification needs a trial id', () => reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'verified', reason: 'Ran it.' }));
   await step('trial', () => editor.createTrial(project.id, { expected_version: project.version, revision_id: proposed.resource.id, robot_model: 'Cart AMR',
     task: 'Dock to aisle 4 around the crate.', kind: 'simulation', outcome: 'pass', prediction: 'pass', source_ids: [source.resource.id], notes: 'Contract fixture.', occurred_at: new Date().toISOString() }));
+  // A physical pass followed by a later physical fail: the earlier pass cannot verify the change.
+  project = (await reader.getProject(project.id)).project;
+  const measured = await step('measured evidence', () => editor.addEvidence(project.id, { expected_version: project.version, revision_id: proposed.resource.id, source_id: source.resource.id,
+    component_id: 'aisle-4', kind: 'measured', claim: 'Clearance past the crate.', value: 0.42, unit: 'm', locator: { note: 'tape at the crate' }, uncertainty: 0.01 }));
+  project = measured.project;
+  project = (await step('confirm measurement', () => reviewer.reviewEvidence(project.id, measured.resource.id, { expected_version: project.version, decision: 'confirmed', reason: 'Tape photo.' }))).project;
+  const trialAt = Date.now() + 1000;
+  const physical = (outcome, at) => editor.createTrial(project.id, { expected_version: project.version, revision_id: proposed.resource.id, robot_model: 'Cart AMR',
+    task: 'Dock to aisle 4 around the crate.', kind: 'physical', outcome, prediction: 'pass', source_ids: [source.resource.id], measurement_evidence_ids: [measured.resource.id],
+    notes: 'Contract fixture.', occurred_at: new Date(at).toISOString() });
+  const passed = await step('physical pass', () => physical('pass', trialAt));
+  project = passed.project;
+  project = (await step('later physical fail', () => physical('fail', trialAt + 1000))).project;
+  await step('earlier pass cannot verify', () => reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'verified', reason: 'Passed once.', trial_id: passed.resource.id }));
   await step('get project', () => reader.getProject(project.id));
   await step('get source', () => reader.getSource(project.id, source.resource.id));
   await step('reader cannot write', () => reader.createProject({ title: 'Nope' }));
@@ -121,7 +135,7 @@ test('the sandbox answers the scripted workflow exactly like the real service', 
     const codes = Object.fromEntries(real.filter(s => s.code).map(s => [s.name, s.code]));
     assert.deepEqual(codes, {
       'stale version refused': 'stale-version', 'measured without value refused': 'invalid-input', 'editor cannot approve': 'forbidden',
-      'approval waits for evidence': 'evidence-unreviewed', 'approve twice refused': 'invalid-transition', 'verification needs a trial id': 'invalid-input',
+      'approval waits for evidence': 'evidence-unreviewed', 'approve twice refused': 'invalid-transition', 'verification needs a trial id': 'invalid-input', 'earlier pass cannot verify': 'latest-physical-trial-required',
       'reader cannot write': 'forbidden', 'empty title refused': 'invalid-input', 'unknown project': 'not-found', 'keys need admin': 'forbidden',
       'revoked key refused': 'invalid-api-key', 'no key': 'missing_api_key', 'key reuse refused': 'idempotency-conflict',
       'no idempotency key': 'idempotency-key-required', 'json required': 'json-required',

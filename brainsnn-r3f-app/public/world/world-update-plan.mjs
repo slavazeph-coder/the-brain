@@ -26,6 +26,10 @@ export function checkWorldUpdatePlan(plan) {
     for (const value of references(step.body)) {
       if (!refs.has(value.slice(1))) throw new Error(`Step ${index + 1} refers to ${value} before it exists.`);
     }
+    // The service accepts at most 32 evidence IDs on a change; refuse here, before any step runs, not at that step.
+    if (step.action === 'createChange' && (!Array.isArray(step.body.evidence_ids) || step.body.evidence_ids.length > 32)) {
+      throw new Error(`Step ${index + 1} must cite 1 to 32 evidence items.`);
+    }
     refs.add(step.ref);
   }
   return plan;

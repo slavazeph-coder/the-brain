@@ -285,6 +285,20 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
         if (trial.kind !== 'physical' || trial.outcome !== 'pass' || trial.revision_id !== resource.proposed_revision_id || !trial.measurement_evidence_ids.length) {
           throw new SandboxError(409, 'physical-trial-required', 'Record a passing physical trial with confirmed measurements for the proposed revision.');
         }
+        // The service's other two rules: the trial came after the implementation, and no later physical trial overrides it.
+        const implemented = resource.decisions.findLast(d => d.decision === 'implemented');
+        if (!implemented || !(trial.recorded_project_version > implemented.project_version) || Date.parse(trial.occurred_at) < Date.parse(implemented.at)) {
+          throw new SandboxError(409, 'post-implementation-trial-required', 'Verification requires a physical trial that occurred and was recorded after the implementation decision.');
+        }
+        if (latestPhysical(p.trials, resource.proposed_revision_id)?.id !== trial.id) {
+          throw new SandboxError(409, 'latest-physical-trial-required', 'Review the latest physical trial for this revision. An earlier pass cannot supersede a later outcome.');
+        }
+        for (const id of trial.measurement_evidence_ids) {
+          const e = record(p, id, 'evidence');
+          if (e.kind !== 'measured' || e.status !== 'confirmed' || e.revision_id !== trial.revision_id) {
+            throw new SandboxError(409, 'measurement-review-required', 'Physical verification needs confirmed measured evidence on the same proposed revision.');
+          }
+        }
       } else if (body.trial_id !== undefined && body.trial_id !== null) bad('A trial reference is accepted only for verification.');
       resource.decisions.push({ id: newId('decision'), decision, reason: text(body.reason, 'decision reason', 2000), trial_id: trialId,
         actor_id: principal.actor.id, actor_name: principal.actor.name, role: principal.key.role, at: time(), project_version: p.version + 1,

@@ -211,6 +211,18 @@ def test_no_candidate_means_nothing_to_propose_and_oversized_updates_are_refused
     assert plan['steps'] == [] and 'nothing is proposed' in plan['note']
     with pytest.raises(ValueError, match='512 KiB'):
         wu.project_requests(synthetic_result(), 'x' * (wu.MAX_SOURCE_BYTES + 1))
+    # A change cites at most 32 evidence items and a plan runs at most 64 requests: refused before any request.
+    crowded = synthetic_result()
+    first = crowded['understand']['candidates'][0]
+    crowded['understand']['candidates'] = [{**first, 'id': f'candidate-{k}'} for k in range(1, 34)]
+    with pytest.raises(ValueError, match='at most 32'):
+        wu.project_requests(crowded, '{}')
+    crowded['understand']['candidates'] = crowded['understand']['candidates'][:32]
+    assert len(wu.project_requests(crowded, '{}')['steps'][-1]['body']['evidence_ids']) == 32
+    fleet = synthetic_result()
+    fleet['adapt']['robots'] = [{**fleet['adapt']['robots'][0], 'id': f'robot-{k}'} for k in range(32)]
+    with pytest.raises(ValueError, match='at most 64'):
+        wu.project_requests(fleet, '{}')
 
 
 # ---------------------------------------------------------------- the loop on rendered walks

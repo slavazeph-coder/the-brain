@@ -47,6 +47,8 @@ MAX_FRAMES = 16
 MAX_ROBOTS = 8
 MAX_GRID_CELLS = 250_000
 MAX_SOURCE_BYTES = 524_288  # one retained World Project source
+MAX_CHANGE_EVIDENCE = 32  # evidence_ids one World Project change accepts
+MAX_PLAN_STEPS = 64  # requests world-update-plan.mjs applies from one plan
 ROBOT_ID = re.compile(r'^[a-z0-9][a-z0-9-]{0,39}$')
 THRESHOLDS = {
     'cell_m': 0.1,                 # floor grid resolution
@@ -1000,6 +1002,11 @@ def project_requests(result: dict, update_text: str) -> dict:
             'claim': claim[:2000], 'value': candidate['footprint_area_m2'], 'unit': 'm2',
             'locator': {'note': f"world-update.json understand.candidates[{index}]; {located} located walk frames"},
             'uncertainty': result['thresholds']['cell_m']}})
+    if len(evidence) > MAX_CHANGE_EVIDENCE:
+        # Refused before any request: a change can cite at most 32 evidence items, and a plan that failed at its first
+        # change would leave the source and evidence recorded with nothing to review.
+        raise ValueError(f'The walk found {len(evidence)} candidate changes; one reviewable change can cite at most '
+                         f'{MAX_CHANGE_EVIDENCE}. Walk a smaller part of the site, or raise min_candidate_points.')
     route = result['adapt']['route']
     for robot in result['adapt']['robots']:
         before, after = robot['before'], robot['after']
@@ -1023,6 +1030,9 @@ def project_requests(result: dict, update_text: str) -> dict:
                        f"({robot['footprint_m'][0]} x {robot['footprint_m'][1]} m, {robot['height_m']} m tall) {summary}. "
                        'Planning preview only; confirm the evidence and approve before any robot uses this route.')[:2000],
             'evidence_ids': list(evidence)}})
+    if len(plan['steps']) > MAX_PLAN_STEPS:
+        raise ValueError(f"This update needs {len(plan['steps'])} World Project requests; a plan runs at most {MAX_PLAN_STEPS}. "
+                         'Propose it for fewer robots at a time.')
     return plan
 
 

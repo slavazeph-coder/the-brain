@@ -114,6 +114,10 @@ test('plans are checked before any request: references must exist and versions a
   unknown.steps[0].action = 'decideChange';
   assert.throws(() => checkWorldUpdatePlan(unknown), /known action/);
   assert.throws(() => checkWorldUpdatePlan({ schema: 'other', steps: [] }), /project-request-plan/);
+  const crowded = structuredClone(plan);
+  const change = crowded.steps.find(step => step.action === 'createChange');
+  change.body.evidence_ids = Array.from({ length: 33 }, () => change.body.evidence_ids[0]);
+  assert.throws(() => checkWorldUpdatePlan(crowded), /1 to 32 evidence items/);
 });
 
 test('a plan cannot be proposed against a site without an as-is revision', async () => {
