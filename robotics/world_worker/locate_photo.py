@@ -108,20 +108,27 @@ def solve(points2d, points3d, camera) -> dict:
     return out
 
 
-def locate(workspace: Path, photo: Path, scratch: Path) -> dict:
+def features(prepared: Path):
+    """SIFT keypoints (COLMAP pixel convention) and unit descriptors of a prepared photo."""
     import numpy as np
     import pycolmap
     from PIL import Image
+    gray = np.ascontiguousarray(np.asarray(Image.open(prepared).convert('L'), dtype=np.uint8))
+    options = pycolmap.FeatureExtractionOptions({'num_threads': sparse_colmap.THREADS, 'max_image_size': sparse_colmap.MAX_IMAGE_EDGE,
+                                                 'sift': {'max_num_features': 4096}})
+    keypoints, descriptors = pycolmap.Sift(options, device=pycolmap.Device.cpu).extract(gray)
+    return keypoints, unit_rows(descriptors)
+
+
+def locate(workspace: Path, photo: Path, scratch: Path) -> dict:
+    import numpy as np
+    import pycolmap
     started = time.monotonic()
     model = selected_model(workspace)
     scratch.mkdir(parents=True, exist_ok=True)
     prepared = scratch / 'located-photo.jpg'
     preparation = sparse_colmap.prepare_photo(photo, prepared, with_evidence=True)
-    gray = np.ascontiguousarray(np.asarray(Image.open(prepared).convert('L'), dtype=np.uint8))
-    options = pycolmap.FeatureExtractionOptions({'num_threads': sparse_colmap.THREADS, 'max_image_size': sparse_colmap.MAX_IMAGE_EDGE,
-                                                 'sift': {'max_num_features': 4096}})
-    keypoints, descriptors = pycolmap.Sift(options, device=pycolmap.Device.cpu).extract(gray)
-    query = unit_rows(descriptors)
+    keypoints, query = features(prepared)
     # One 3D point per photo feature and one photo feature per 3D point, keeping the strongest frame's vote.
     by_point, frames = {}, []
     database = pycolmap.Database.open(str(workspace / 'database.db'))
