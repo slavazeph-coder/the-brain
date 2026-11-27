@@ -92,12 +92,13 @@ const HOME = {
   body: [
     'Walk: walk a space with your phone and tap features as you pass them. Export GeoPackage, GPX or CSV. Map position comes from the phone’s own GPS accuracy; shapes and distances are not measured.',
     'World Builder: turn a walk video, photos or a scan into an editable 3D world, move objects and try a robot route. Scale stays unverified until you check a known length, and robot routes are planning previews, not physical robot execution.',
-    'API: send captures to the reconstruction worker from your own code, then fetch jobs and artifacts, with limits and usage per key. Access is by pilot key.',
+    'API: try every call of the World Projects API in a browser sandbox, then call it from your own code: projects, evidence, client review, keys and usage, plus processing for captures. Access is by pilot key.',
   ],
   primaryLinks: [
     { path: '/walk/', label: 'Walk' },
     { path: '/world/', label: 'World Builder' },
-    { path: '/world/api.html', label: 'API' },
+    { path: '/platform/', label: 'API platform' },
+    { path: '/world/api.html', label: 'API guide' },
   ],
 };
 

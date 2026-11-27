@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BrainSNN Platform</title>
+  <meta name="description" content="Build with BrainSNN: the World Projects API with a sandbox, an API explorer, client review, keys and usage.">
+  <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0f15" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="./platform.css">
+  <script type="module" src="./platform.mjs"></script>
+</head>
+<body class="platform">
+  <a class="pf-skip" href="#pf-main">Skip to content</a>
+  <header class="pf-top">
+    <a class="pf-brand" href="/" aria-label="BrainSNN home"><span class="pf-mark" aria-hidden="true">B</span><strong>BrainSNN</strong><span class="pf-tag">Platform</span></a>
+    <div class="pf-top-right">
+      <span class="pf-service" id="pf-service" data-ok="">Checking API</span>
+      <span class="pf-mode" id="pf-mode" data-mode="none">Not connected</span>
+      <span class="pf-who" id="pf-who"></span>
+      <div class="pf-role" id="pf-role" role="group" aria-label="Act as (sandbox)" hidden>
+        <button type="button" data-role="admin" aria-pressed="true">Admin</button>
+        <button type="button" data-role="editor" aria-pressed="false">Operator</button>
+        <button type="button" data-role="reviewer" aria-pressed="false">Client</button>
+        <button type="button" data-role="reader" aria-pressed="false">Viewer</button>
+      </div>
+      <button type="button" class="pf-primary pf-small" id="pf-connect-open">Connect</button>
+      <button type="button" class="pf-ghost pf-small" id="pf-disconnect" hidden>Disconnect</button>
+      <button type="button" class="pf-ghost pf-small pf-icon" id="pf-theme" aria-label="Switch light or dark"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/></svg></button>
+    </div>
+  </header>
+  <div class="pf-shell">
+    <nav class="pf-side" aria-label="Platform">
+      <a href="#/" data-view-link="">Home <span class="pf-count pf-mono" id="pf-progress-count" aria-label="steps done">0/5</span></a>
+      <a href="#/explorer" data-view-link="explorer">API explorer</a>
+      <a href="#/projects" data-view-link="projects">Projects</a>
+      <a href="#/keys" data-view-link="keys">Keys</a>
+      <a href="#/usage" data-view-link="usage">Usage</a>
+      <a href="#/processing" data-view-link="processing">Processing</a>
+      <a href="#/docs" data-view-link="docs">Docs</a>
+      <div class="pf-side-foot">
+        <a href="/world/">World Builder</a>
+        <a href="/walk/">Walk</a>
+        <a href="/world/api.html#site-pilot">Site pilot</a>
+      </div>
+    </nav>
+    <main id="pf-main" tabindex="-1"></main>
+  </div>
+  <div class="pf-toast" id="pf-toast" role="status" aria-live="polite" hidden></div>
+  <dialog class="pf-dialog" id="pf-connect" aria-labelledby="pf-connect-title">
+    <div class="pf-dialog-head"><h2 id="pf-connect-title">Connect</h2><button type="button" class="pf-ghost pf-small" id="pf-connect-close" aria-label="Close">✕</button></div>
+    <div class="pf-tabs" role="tablist" aria-label="How to connect">
+      <button type="button" role="tab" data-connect-tab="sandbox" aria-selected="true">Sandbox</button>
+      <button type="button" role="tab" data-connect-tab="key" aria-selected="false">My key</button>
+    </div>
+    <section data-connect-panel="sandbox">
+      <p>A private copy of the API that runs in this tab. Four people to act as: admin, site operator, client reviewer and viewer. Nothing is sent anywhere or saved.</p>
+      <button type="button" class="pf-primary" id="pf-sandbox-start">Start the sandbox</button>
+    </section>
+    <section data-connect-panel="key" hidden>
+      <form id="pf-key-form" autocomplete="off">
+        <label for="pf-key" class="pf-label">Project API key</label>
+        <input id="pf-key" class="pf-input pf-mono" type="password" autocomplete="off" spellcheck="false" placeholder="bsk_…" required>
+        <p class="pf-fine">Your key stays in this tab's memory. It is never stored or put in a link; reload and it is gone.</p>
+        <button type="submit" class="pf-primary">Connect</button>
+      </form>
+      <p class="pf-fine">No key yet? Keys are issued with a <a href="/world/api.html#site-pilot">site pilot</a>, or <a href="/world/api.html#waitlist">join the API waitlist</a>.</p>
+    </section>
+    <div id="pf-connect-error"></div>
+  </dialog>
+</body>
+</html>

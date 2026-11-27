@@ -4,7 +4,7 @@ export const NAV_ITEMS = [
   { id: 'walk', label: 'Walk', mobileLabel: 'Walk', href: '/walk/', icon: Footprints, cta: true, ctaLabel: 'Walk a space', description: 'Map a space with your phone: GPS track, tapped features, photos and video.' },
   { id: 'world', label: 'World Builder', mobileLabel: 'World', href: '/world/', icon: Building2, description: 'Turn a walk, photos or a scan into an editable 3D world and try a robot in it.' },
   { id: 'creative-engine', label: 'Creative Engine', mobileLabel: 'Engine', href: '/app', icon: Brain, description: 'Scan, improve and compare drafts for attention, trust and pressure signals.' },
-  { id: 'developers', label: 'API', mobileLabel: 'API', href: '/world/api.html', icon: Code2, description: 'Private worker API for captures, jobs and artifacts.' },
+  { id: 'developers', label: 'API', mobileLabel: 'API', href: '/platform/', icon: Code2, description: 'Developer platform: sandbox, API explorer, client review, keys and usage.' },
   { id: 'lab', label: 'Lab', mobileLabel: 'Lab', href: '/lab', icon: FlaskConical, description: 'Explore experiments and research tools.' },
 ];
 export const OVERFLOW_ITEMS = [

@@ -64,7 +64,7 @@ describe('per-route social previews', () => {
     expect(home.body.join(' ')).toContain('not physical robot execution');
     expect(home.body.join(' ')).toContain('Access is by pilot key');
     const block = renderContentBlock(home, '/');
-    for (const href of ['/walk/', '/world/', '/world/api.html', '/arena/', '/office', '/lab']) {
+    for (const href of ['/walk/', '/world/', '/platform/', '/world/api.html', '/arena/', '/office', '/lab']) {
       expect(block).toContain(`href="${href}"`);
     }
     expect(resolveRouteMeta('/').canonicalPath).toBe('/');
@@ -274,7 +274,7 @@ describe('content a crawler can read without running JavaScript', () => {
     for (const path of ['/arena/', '/office', '/evidence', '/lab', '/app', '/agent-lab']) expect(home).toContain(`href="${path}"`);
     for (const path of ['/play', '/arcade', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
     expect(home).toContain('<details><summary>More</summary>');
-    for (const path of ['/walk/', '/world/', '/world/api.html']) expect(home).toContain(`href="${path}"`);
+    for (const path of ['/walk/', '/world/', '/platform/', '/world/api.html']) expect(home).toContain(`href="${path}"`);
     const world = applyRouteMeta(HTML, '/world', '', 'https://x.test');
     expect(world).toContain('href="/world/index.html"');
     expect(world).toContain('href="/world/index.html#showcase"');

@@ -41,6 +41,7 @@ ROUTES = {
     '/arena/': 'Robot arcade',
     '/?classic=1': 'Test your robot',
     '/walk/': 'Walk a space',
+    '/platform/': 'Build with',
 }
 
 PRESSURE_AD = ('Limited spots left! Our AI platform guarantees 10x growth in 7 days. Join 5,000 marketers '
