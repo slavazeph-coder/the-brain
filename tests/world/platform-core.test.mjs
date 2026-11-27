@@ -51,6 +51,15 @@ test('the prefilled bodies carry a first-time developer through the whole review
   const approved = await send('decideChange', 'reviewer');
   assert.equal(approved.resource.status, 'approved');
   assert.equal(context.version, approved.project.version);
+  // A second site starts clean: its first revision is its own as-is baseline, not a proposal on the first site's.
+  const first = context.project_id;
+  await send('createProject');
+  assert.notEqual(context.project_id, first);
+  for (const key of ['source_id', 'as_is_revision_id', 'proposed_revision_id', 'evidence_id', 'change_id']) assert.equal(context[key], undefined, key);
+  await send('addSource');
+  const baseline = await send('createRevision');
+  assert.equal(baseline.resource.kind, 'as_is');
+  assert.equal(baseline.resource.parent_revision_id ?? null, null);
 });
 
 test('snippets are copy-ready and never contain the key', () => {
@@ -87,6 +96,12 @@ test('the planner toy keeps the world-update outcomes: a box reroutes a robot, a
   const walled = planner.grid(40, 24);
   planner.setBox(walled, 18, 0, 2, 24);
   assert.equal(planner.plan(walled, before, 1.5, start, goal).outcome, 'opened');
+  // A box beside a diagonal step leaves every old cell free, but the step now cuts its corner.
+  const open = planner.grid(5, 5), corner = planner.grid(5, 5);
+  planner.setBox(corner, 2, 1, 1, 1);
+  const diag = planner.plan(open, corner, 0, [1, 1], [3, 3]);
+  assert.equal(diag.outcome, 'rerouted');
+  assert.ok(planner.pathFree(corner, planner.astar(corner, [1, 1], [3, 3])) && !planner.pathFree(corner, [[1, 1], [2, 2], [3, 3]]));
   for (const path of [small.after, small.before]) {
     for (let k = 1; k < path.length; k++) assert.ok(planner.lineFree(planner.inflate(after, 1.5), path[k - 1], path[k]) || path === small.before);
   }

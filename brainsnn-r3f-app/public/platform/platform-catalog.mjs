@@ -127,13 +127,17 @@ export function pathDefaults(context = {}) {
     key_id: context.key_id, upload_id: context.upload_id, job_id: context.job_id };
 }
 
+// IDs that belong to one project. Switching project drops them, so the next request never points at the last site.
+const PROJECT_SCOPED = ['source_id', 'as_is_revision_id', 'proposed_revision_id', 'evidence_id', 'change_id', 'upload_id', 'job_id'];
+
 /** What a response teaches the session: IDs and the project version, for prefilling the next request. */
 export function learn(context, op, body) {
   const next = { ...context };
   if (!body || typeof body !== 'object') return next;
+  const switchTo = id => { if (id !== next.project_id) for (const key of PROJECT_SCOPED) delete next[key]; next.project_id = id; };
   const project = body.project;
-  if (project?.id) { next.project_id = project.id; next.version = project.version; }
-  if (Array.isArray(body.projects) && body.projects.length && !next.project_id) { next.project_id = body.projects[0].id; next.version = body.projects[0].version; }
+  if (project?.id) { switchTo(project.id); next.version = project.version; }
+  if (Array.isArray(body.projects) && body.projects.length && !next.project_id) { switchTo(body.projects[0].id); next.version = body.projects[0].version; }
   const r = body.resource;
   if (r?.id) {
     if (r.id.startsWith('src_')) next.source_id = r.id;
@@ -141,7 +145,10 @@ export function learn(context, op, body) {
     if (r.id.startsWith('ev_')) next.evidence_id = r.id;
     if (r.id.startsWith('chg_')) next.change_id = r.id;
   }
-  if (project?.current_as_is_revision_id) next.as_is_revision_id = project.current_as_is_revision_id;
+  if (project && 'current_as_is_revision_id' in project) {
+    if (project.current_as_is_revision_id) next.as_is_revision_id = project.current_as_is_revision_id;
+    else delete next.as_is_revision_id;  // no baseline yet: the next revision is the as-is one
+  }
   if (body.key?.id && op.id === 'createKey') next.key_id = body.key.id;
   return next;
 }

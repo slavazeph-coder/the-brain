@@ -7,6 +7,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createProjectsClient, createIdempotencyKey } from '../../brainsnn-r3f-app/public/world/projects-client.mjs';
 import { createSandboxApi } from '../../brainsnn-r3f-app/public/platform/platform-sandbox.mjs';
 import { startProjectPlatformFixture } from './project-platform-server.mjs';
+import { snippets } from '../../brainsnn-r3f-app/public/platform/platform-snippets.mjs';
+import { mkdtemp, copyFile, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const sha = text => createHash('sha256').update(text).digest('hex');
 
@@ -135,4 +141,24 @@ test('the sandbox is private to the page and says it is a sandbox', async () => 
   const status = await client.status();
   assert.equal(status.sandbox, true);
   await assert.rejects(client.processingRequest('/capabilities'), error => error.status === 501 && error.code === 'sandbox-not-simulated');
+});
+
+test('the JavaScript snippet runs as copied: Node, with the SDK files saved beside it', async () => {
+  const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_snippet_${randomUUID().slice(0, 8)}` });
+  const dir = await mkdtemp(join(tmpdir(), 'brainsnn-snippet-'));
+  try {
+    const { javascript } = snippets({ method: 'POST', path: '/projects', body: { title: 'Snippet aisle' }, op: { id: 'createProject' }, origin: fixture.url });
+    assert.match(javascript, /curl -sS -O .*projects-client\.mjs -O .*projects-sha256\.mjs/);
+    // The same files the curl line in the snippet downloads.
+    for (const file of ['projects-client.mjs', 'projects-sha256.mjs']) {
+      await copyFile(new URL(`../../brainsnn-r3f-app/public/world/${file}`, import.meta.url), join(dir, file));
+    }
+    await writeFile(join(dir, 'example.mjs'), javascript);
+    const { stdout } = await promisify(execFile)(process.execPath, ['example.mjs'], { cwd: dir, timeout: 30_000,
+      env: { ...process.env, BRAINSNN_API_KEY: fixture.credentials.editor.token } });
+    assert.match(stdout, /Snippet aisle/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await fixture.close();
+  }
 });

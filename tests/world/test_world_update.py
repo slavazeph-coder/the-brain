@@ -128,6 +128,21 @@ def test_a_robot_with_no_route_before_is_reported_as_such():
     assert plan == {'outcome': 'no-route-before', 'before': None, 'after': None}
 
 
+def test_an_old_route_is_kept_only_if_its_diagonal_steps_still_clear_every_corner():
+    free = np.ones((5, 5), bool)
+    assert wu.astar(free, (1, 1), (3, 3)) == [(1, 1), (2, 2), (3, 3)]
+    after = free.copy()
+    after[2, 1] = False  # beside the first diagonal step; every cell of the old route stays free
+    plan = wu.plan_routes(free, after, (1, 1), (3, 3))
+    assert plan['outcome'] == 'rerouted' and plan['after'] != plan['before']
+    assert wu.path_free(after, plan['after']) and not wu.path_free(after, plan['before'])
+    # Both corners of the only diagonal blocked: the old cells are free, but nothing can pass.
+    tight = np.ones((2, 2), bool)
+    closed = tight.copy()
+    closed[0, 1] = closed[1, 0] = False
+    assert wu.plan_routes(tight, closed, (0, 0), (1, 1)) == {'outcome': 'blocked', 'before': [(0, 0), (1, 1)], 'after': None}
+
+
 def test_simplified_route_keeps_clear_lines():
     free = ~wu.inflate(np.pad(np.ones((6, 4), dtype=bool), ((7, 7), (18, 18))), 1)
     path = wu.astar(free, (1, 1), (18, 38))

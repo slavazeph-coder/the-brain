@@ -47,8 +47,12 @@ export function snippets({ method, path, body = null, op = { id: '' }, origin = 
   } else {
     call = `// Not wrapped by the SDK: call it over HTTP as in the curl example.`;
   }
+  // Node 22+ (run as an .mjs file). Node cannot import from an https:// URL, so the SDK's two files sit beside the script.
+  const sdk = `${origin.replace(/\/$/, '')}/world`;
   const javascript = [
-    `import { createProjectsClient } from '${origin.replace(/\/$/, '')}/world/projects-client.mjs';`,
+    '// Node 22+. Save the SDK beside this file once:',
+    `//   curl -sS -O ${sdk}/projects-client.mjs -O ${sdk}/projects-sha256.mjs`,
+    `import { createProjectsClient } from './projects-client.mjs';`,
     '',
     `const client = createProjectsClient({ apiKey: process.env.BRAINSNN_API_KEY, baseUrl: '${base}' });`,
     mutation ? '// The SDK adds an Idempotency-Key; reuse prepareMutation(...) to retry the exact same request.' : null,

@@ -887,12 +887,23 @@ def before_union(grid, model_uv, model_height, robots, thresholds):
     return grid.counts(model_uv[band]) >= thresholds['min_cell_points']
 
 
+def path_free(free, path):
+    """Whether a cell path is still drivable under A*'s own rules: every cell free, and no diagonal step cutting a
+    blocked corner. Checking cells alone would keep a route that now clips a new obstacle beside a diagonal step."""
+    if not all(free[cell] for cell in path):
+        return False
+    for (i, j), (a, b) in zip(path, path[1:]):
+        if a != i and b != j and not (free[a, j] and free[i, b]):
+            return False
+    return True
+
+
 def plan_routes(before_free, after_free, start, goal):
     before = astar(before_free, start, goal)
     if before is None:
         after = astar(after_free, start, goal)
         return {'outcome': 'opened' if after else 'no-route-before', 'before': None, 'after': after}
-    if all(after_free[cell] for cell in before):
+    if path_free(after_free, before):
         # Still clear; a removal may also have opened a shorter way (more than one cell shorter).
         after = astar(after_free, start, goal)
         if after and route_length(after) < route_length(before) - 1:

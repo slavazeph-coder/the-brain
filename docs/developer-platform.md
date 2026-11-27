@@ -9,7 +9,7 @@ It reuses the existing API, SDK and OpenAPI document. There is no new backend an
 
 | View | What it does | Built on |
 | --- | --- | --- |
-| Home | One-click sandbox; "your first five minutes" checklist that ticks as you go; a planner toy where dropped boxes reroute two robot sizes; a 3-line quickstart | `platform-planner.mjs` (same rules as `world_update.py`) |
+| Home | One-click sandbox; "your first five minutes" checklist that ticks as you go; a planner toy where dropped boxes reroute two robot sizes; a first-call quickstart (Node: save the two SDK files beside the script, then run it) | `platform-planner.mjs` (same rules as `world_update.py`) |
 | API explorer | All 39 documented operations, grouped by task. Bodies are prefilled from what the session already created, so the review workflow is eight clicks. Shows the raw response, request ID and replay flag, a plain-words fix for each error, and the same request as curl, JavaScript (SDK) or Python | `projects-api.openapi.json`, `platform-catalog.mjs`, `platform-snippets.mjs` |
 | Projects → client view | Each site in plain language: readiness and its first blocker, what is waiting on you (confirm evidence, approve or reject with a reason, mark done on site), and what happened | `GET /projects/{id}`, review and decision endpoints |
 | Keys | Issue a key per person and role (shown once, never stored), and revoke it in two clicks | `/keys` (admin) |

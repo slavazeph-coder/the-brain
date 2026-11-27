@@ -212,8 +212,8 @@ function renderHome(main) {
     featureCard('Client review', 'A plain-language page for the people who approve changes: what changed, the evidence, and two buttons.', '#/projects', 'Open projects'),
     featureCard('Keys and usage', 'Issue a key per person and role, revoke it in one click, and see this month\'s usage against your limits.', '#/keys', 'Manage keys'));
   const quick = h('section', { class: 'pf-card', 'aria-labelledby': 'pf-quick' },
-    h('h2', { id: 'pf-quick', text: 'Three lines to your first call' }),
-    h('p', { class: 'pf-muted', text: 'Set BRAINSNN_API_KEY in your environment. The SDK adds idempotency keys and checks every response.' }),
+    h('h2', { id: 'pf-quick', text: 'Your first call' }),
+    h('p', { class: 'pf-muted', text: 'Set BRAINSNN_API_KEY in your environment. In Node, save the two SDK files beside your script first (the curl line in the JavaScript tab). The SDK adds idempotency keys and checks every response.' }),
     codeTabs(snippets({ method: 'GET', path: '/projects', op: { id: 'listProjects' }, origin: origin() }), 'Quickstart'));
   add(main, hero, checklist, cards, quick);
 }

@@ -100,11 +100,22 @@ export function simplify(path, blocked) {
 export const length = path => (path || []).slice(1).reduce((sum, p, k) => sum + Math.hypot(p[0] - path[k][0], p[1] - path[k][1]), 0);
 
 /** The world_update.py outcomes for one robot: unchanged, shortened, opened, rerouted, blocked, no-route-before. */
+/** Whether a cell path is still drivable under astar's rules: every cell free and no diagonal step cutting a blocked corner. */
+export function pathFree(blocked, path) {
+  const at = (x, y) => blocked.cells[y * blocked.width + x];
+  for (let k = 0; k < path.length; k++) {
+    const [x, y] = path[k];
+    if (at(x, y)) return false;
+    if (k && path[k - 1][0] !== x && path[k - 1][1] !== y && (at(x, path[k - 1][1]) || at(path[k - 1][0], y))) return false;
+  }
+  return true;
+}
+
 export function plan(before, after, radius, start, goal) {
   const b = inflate(before, radius), a = inflate(after, radius);
   const was = astar(b, start, goal);
   if (!was) { const now = astar(a, start, goal); return { outcome: now ? 'opened' : 'no-route-before', before: null, after: simplify(now, a) }; }
-  if (was.every(([x, y]) => !a.cells[y * a.width + x])) {
+  if (pathFree(a, was)) {
     const now = astar(a, start, goal);
     if (now && length(now) < length(was) - 1) return { outcome: 'shortened', before: simplify(was, b), after: simplify(now, a) };
     return { outcome: 'unchanged', before: simplify(was, b), after: simplify(was, b) };
