@@ -162,7 +162,7 @@ def check_front_door(page, base):
     page.locator('#fd-title').wait_for()
     assert page.locator('iframe').count()==0,'The homepage must not load World Builder'
     doors=page.get_by_role('list',name='Choose where to start').locator('a.fd-door')
-    assert [doors.nth(i).get_attribute('href') for i in range(doors.count())]==['/walk/','/world/','/world/api.html']
+    assert [doors.nth(i).get_attribute('href') for i in range(doors.count())]==['/walk/','/world/','/platform/']
     for i in range(3):assert doors.nth(i).locator('.fd-door-limit').inner_text().strip(),'Each door states its limitation'
     nav=page.get_by_role('navigation',name='Main navigation',exact=True)
     assert [a.inner_text() for a in nav.locator(':scope > a').all()]==['World Builder','Creative Engine','API','Lab']

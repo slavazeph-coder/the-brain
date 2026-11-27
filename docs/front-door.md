@@ -99,3 +99,32 @@ Not done:
 - tap targets under 24px, or text under 10px, on the homepage, Review, Lab and Agent Lab
 - a verdict that repeats itself
 - a next step that is off the first screen
+
+## Nov 27: the calm homepage
+
+The homepage now uses a calm, light register, set in `src/styles/front-door.css` and scoped to `.fd-calm`; the rest of
+the site keeps its dark tokens. The structure is modelled on a reference the owner chose. The identity, content and
+assets are BrainSNN's own.
+
+- **Type:** off-white page and a serif display face (Newsreader, OFL, self-hosted through `@fontsource/newsreader`).
+  Small monospace labels; two pill buttons (pilot, platform).
+- **Route line:** one decorative route line bends around a box, with a robot dot travelling it.
+- **Formats strip:** a strip of the formats we actually deliver, in place of a logo wall.
+- **Engine sections:**
+  - "Every site is different": the problem.
+  - "One robot sees. Another adapts.": the loop as five rows.
+  - A dark band: an animated aisle where a crate lands and two robot sizes reroute, with the rendered stress-test
+    result labelled as rendered.
+- **The three doors**, then a soft closing wash ("Bring us one site.").
+
+Unchanged, because tests pin them:
+- the headline (`#fd-title`);
+- the doors and their limits;
+- the nav labels and the Walk call to action.
+
+Checked on the production build:
+- route checks for `/`, `/platform/`, `/app` and `/walk/`;
+- phone tap targets and text size;
+- the front-door test;
+- axe WCAG A/AA: 0 violations;
+- 1,128 app unit tests.
