@@ -90,7 +90,8 @@ async function workflow({ baseUrl, fetchImpl, tokens }) {
 }
 
 test('the sandbox answers the scripted workflow exactly like the real service', async () => {
-  const fixture = await startProjectPlatformFixture();
+  // A fresh workspace, so the real service starts as empty as the sandbox even on a shared CI database.
+  const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_contract_${randomUUID().slice(0, 8)}` });
   try {
     const real = await workflow({ baseUrl: `${fixture.url}/api/world/v1`,
       tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) });

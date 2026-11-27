@@ -8,6 +8,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { startProjectPlatformFixture } from './project-platform-server.mjs';
 import { createProjectsClient } from '../../brainsnn-r3f-app/public/world/projects-client.mjs';
 
@@ -18,7 +19,8 @@ const executablePath = [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium', 
 const output = process.env.PLATFORM_SMOKE_OUT || join(tmpdir(), 'brainsnn-platform-smoke');
 await mkdir(output, { recursive: true });
 
-const fixture = await startProjectPlatformFixture();
+// Its own workspace: CI shares one PostgreSQL database with the earlier browser smoke, and this test counts projects and keys.
+const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_smoke_${randomUUID().slice(0, 8)}` });
 const key = role => fixture.credentials[role].token;
 const sdk = role => createProjectsClient({ apiKey: key(role), baseUrl: `${fixture.url}/api/world/v1` });
 const browser = await chromium.launch(executablePath ? { executablePath } : {});
