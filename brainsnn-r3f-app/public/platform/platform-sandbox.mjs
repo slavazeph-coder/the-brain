@@ -24,6 +24,12 @@ class SandboxError extends Error {
 }
 const bad = (message, code = 'invalid-input') => { throw new SandboxError(422, code, message); };
 
+// In bounded chunks: spreading a large source into one call exceeds the engine's argument limit.
+function bytesToBase64(bytes) {
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(text);
+}
 function hex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2, '0')).join(''); }
 function randomHex(n) { const bytes = new Uint8Array(n); globalThis.crypto.getRandomValues(bytes); return hex(bytes); }
 async function sha256(bytes) { return hex(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))); }
@@ -192,7 +198,7 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
       if (p.sources.length >= LIMITS.sourcesPerProject) throw new SandboxError(429, 'source-limit', 'This project reached its retained source limit.');
       resource = { id: newId('src'), name, media_type: body.media_type.toLowerCase(), sha256: digest, bytes: bytes.length, storage_kind: 'inline', ...by };
       resource.download_path = `/projects/${p.id}/sources/${resource.id}/content`;
-      p.sources.push({ ...resource, data_base64: btoa(String.fromCharCode(...bytes)) });
+      p.sources.push({ ...resource, data_base64: bytesToBase64(bytes) });
       eventType = 'source.retained';
     } else if (action === 'revisions' && !resourceId) {
       scope(principal, 'project:write');

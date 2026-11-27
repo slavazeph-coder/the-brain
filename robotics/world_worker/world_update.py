@@ -327,11 +327,28 @@ def astar(free, start, goal):
     return None
 
 
+def line_cells(a, b):
+    """Every cell a straight segment between two cell centres passes through (a supercover). Where it crosses exactly
+    at a grid corner, both side cells count, which is A*'s no-corner-cutting rule; sampling points can miss them."""
+    (x, y), (x1, y1) = (int(a[0]), int(a[1])), (int(b[0]), int(b[1]))
+    nx, ny = abs(x1 - x), abs(y1 - y)
+    sx, sy = (x1 > x) - (x1 < x), (y1 > y) - (y1 < y)
+    cells, ix, iy = [(x, y)], 0, 0
+    while ix < nx or iy < ny:
+        d = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx  # which cell boundary the segment reaches first
+        if d == 0:
+            cells += [(x + sx, y), (x, y + sy)]
+            x, y, ix, iy = x + sx, y + sy, ix + 1, iy + 1
+        elif d < 0:
+            x, ix = x + sx, ix + 1
+        else:
+            y, iy = y + sy, iy + 1
+        cells.append((x, y))
+    return cells
+
+
 def line_free(free, a, b):
-    import numpy as np
-    steps = int(math.ceil(4 * math.hypot(b[0] - a[0], b[1] - a[1]))) + 1
-    cells = np.rint(np.linspace(a, b, steps)).astype(int)
-    return bool(free[cells[:, 0], cells[:, 1]].all())
+    return all(free[cell] for cell in line_cells(a, b))
 
 
 def simplify(path, free):

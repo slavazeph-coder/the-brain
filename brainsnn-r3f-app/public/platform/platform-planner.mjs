@@ -77,11 +77,18 @@ export function astar(blocked, start, goal) {
   return null;
 }
 
+/** Whether a straight segment between two cell centres crosses only free cells. Every cell it passes through counts
+ * (a supercover), and at an exact grid corner both side cells count, as in astar; sampled points can miss them. */
 export function lineFree(blocked, a, b) {
-  const steps = Math.ceil(4 * Math.hypot(b[0] - a[0], b[1] - a[1])) + 1;
-  for (let k = 0; k <= steps; k++) {
-    const x = Math.round(a[0] + (b[0] - a[0]) * k / steps), y = Math.round(a[1] + (b[1] - a[1]) * k / steps);
-    if (blocked.cells[y * blocked.width + x]) return false;
+  const at = (x, y) => blocked.cells[y * blocked.width + x];
+  let [x, y] = a, ix = 0, iy = 0;
+  const nx = Math.abs(b[0] - x), ny = Math.abs(b[1] - y), sx = Math.sign(b[0] - x), sy = Math.sign(b[1] - y);
+  if (at(x, y)) return false;
+  while (ix < nx || iy < ny) {
+    const d = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
+    if (d === 0) { if (at(x + sx, y) || at(x, y + sy)) return false; x += sx; y += sy; ix++; iy++; }
+    else if (d < 0) { x += sx; ix++; } else { y += sy; iy++; }
+    if (at(x, y)) return false;
   }
   return true;
 }

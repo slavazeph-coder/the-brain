@@ -162,3 +162,13 @@ test('the JavaScript snippet runs as copied: Node, with the SDK files saved besi
     await fixture.close();
   }
 });
+
+test('the sandbox retains a large inline source within the 512 KiB limit', async () => {
+  const sandbox = createSandboxApi();
+  const client = createProjectsClient({ apiKey: sandbox.principals.editor, baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch });
+  const { project } = await client.createProject({ title: 'Large source' });
+  const content_text = 'a'.repeat(256 * 1024);
+  const added = await client.addSource(project.id, { expected_version: project.version, name: 'walk.txt', media_type: 'text/plain', content_text });
+  assert.equal(added.resource.bytes, content_text.length);
+  assert.equal(added.resource.sha256, sha(content_text));
+});

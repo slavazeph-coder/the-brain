@@ -102,6 +102,8 @@ test('the planner toy keeps the world-update outcomes: a box reroutes a robot, a
   const diag = planner.plan(open, corner, 0, [1, 1], [3, 3]);
   assert.equal(diag.outcome, 'rerouted');
   assert.ok(planner.pathFree(corner, planner.astar(corner, [1, 1], [3, 3])) && !planner.pathFree(corner, [[1, 1], [2, 2], [3, 3]]));
+  assert.ok(!planner.lineFree(corner, [1, 1], [3, 3]), 'a shortcut may not slip between blocked cells');
+  assert.notDeepEqual(diag.after, [[1, 1], [3, 3]]);
   for (const path of [small.after, small.before]) {
     for (let k = 1; k < path.length; k++) assert.ok(planner.lineFree(planner.inflate(after, 1.5), path[k - 1], path[k]) || path === small.before);
   }

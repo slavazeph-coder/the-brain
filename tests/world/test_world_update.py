@@ -143,6 +143,22 @@ def test_an_old_route_is_kept_only_if_its_diagonal_steps_still_clear_every_corne
     assert wu.plan_routes(tight, closed, (0, 0), (1, 1)) == {'outcome': 'blocked', 'before': [(0, 0), (1, 1)], 'after': None}
 
 
+def test_a_straight_shortcut_may_not_slip_between_blocked_cells():
+    assert wu.line_cells((0, 0), (0, 3)) == [(0, 0), (0, 1), (0, 2), (0, 3)]
+    assert wu.line_cells((1, 1), (3, 3)) == [(1, 1), (2, 1), (1, 2), (2, 2), (3, 2), (2, 3), (3, 3)]
+    assert wu.line_cells((0, 0), (1, 2)) == [(0, 0), (0, 1), (1, 1), (1, 2)]
+    # Through the corner at (0.5, 1.5): both side cells count.
+    assert set(wu.line_cells((0, 0), (1, 3))) == {(0, 0), (0, 1), (1, 1), (0, 2), (1, 2), (1, 3)}
+    free = np.ones((5, 5), bool)
+    free[2, 1] = False
+    detour = wu.astar(free, (1, 1), (3, 3))
+    assert detour == [(1, 1), (1, 2), (2, 2), (3, 3)]
+    assert not wu.line_free(free, (1, 1), (3, 3))  # sampled points used to see only (1,1), (2,2), (3,3)
+    waypoints = wu.simplify(detour, free)
+    assert waypoints != [(1, 1), (3, 3)] and wu.path_free(free, detour)
+    assert all(wu.line_free(free, a, b) for a, b in zip(waypoints, waypoints[1:]))
+
+
 def test_simplified_route_keeps_clear_lines():
     free = ~wu.inflate(np.pad(np.ones((6, 4), dtype=bool), ((7, 7), (18, 18))), 1)
     path = wu.astar(free, (1, 1), (18, 38))
