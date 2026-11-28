@@ -1,0 +1,41 @@
+company,segment,website,why_fit,source,status
+Locus Robotics,warehouse AMR,locusrobotics.com,Deploys fleets into new customer warehouses; reported 2026 Series G,newmarketpitch.com 2026 AMR funding tracker,verify before outreach
+Vecna Robotics,warehouse AMR (forklifts/tuggers),vecnarobotics.com,Autonomous forklifts and tuggers need aisle and turn checks per site; reported 2026 round,newmarketpitch.com 2026 AMR funding tracker,verify before outreach
+Unbox Robotics,warehouse sortation AMR,unboxrobotics.com,Sortation fleets laid out per facility; 2026 Series B,newmarketpitch.com 2026 AMR funding tracker,verify before outreach
+CarbonSix,factory AMR,carbonsix.ai,Factory AMRs placed into customer plants; 2026 Series A,newmarketpitch.com 2026 AMR funding tracker,verify website and focus
+TWINNY,mobile robots (Korea),twinny.ai,AMR maker with 2026 pre-IPO round; many site rollouts,newmarketpitch.com 2026 AMR funding tracker,verify before outreach
+Dexory,warehouse scanning robots,dexory.com,Tall autonomous scanners must fit each site's aisles; 2026 Series C,newmarketpitch.com 2026 AMR funding tracker,verify before outreach
+Brightpick,warehouse AMR + picking,brightpick.ai,Mobile picking robots deployed per site,known operator (pre-2026 knowledge),verify still operating
+Seegrid,autonomous tow tractors / pallet trucks,seegrid.com,Vision-guided AMRs routed through existing facilities,known operator (pre-2026 knowledge),verify still operating
+BALYO,autonomous forklifts,balyo.com,Forklift robots need clearance checks per warehouse,known operator (pre-2026 knowledge),verify still operating
+Third Wave Automation,autonomous forklifts,thirdwave.ai,Shared-autonomy forklifts deployed into customer DCs,known operator (pre-2026 knowledge),verify still operating
+Fox Robotics,autonomous trailer unloading,foxrobotics.com,Forklift robots working dock to aisle,known operator (pre-2026 knowledge),verify still operating
+Robust.AI,collaborative warehouse AMR,robust.ai,Carts deployed into 3PL sites,known operator (pre-2026 knowledge),verify still operating
+inVia Robotics,warehouse AMR,inviarobotics.com,Goods-to-person AMRs per facility,known operator (pre-2026 knowledge),verify still operating
+Exotec,warehouse robot systems,exotec.com,System layout per customer site,known operator (pre-2026 knowledge),verify still operating
+Gideon,autonomous pallet movers,gideon.ai,Autonomous pallet movers into logistics sites,known operator (pre-2026 knowledge),verify still operating
+Agility Robotics,humanoid (logistics),agilityrobotics.com,Digit deployments into customer warehouses need site fit and routes,research notes + known operator,verify still operating
+Apptronik,humanoid,apptronik.com,Humanoid pilots in customer facilities,known operator (pre-2026 knowledge),verify still operating
+Figure AI,humanoid,figure.ai,Humanoid pilots in customer plants,research notes + known operator,verify still operating
+Diligent Robotics,hospital delivery (Moxi),diligentrobots.com,Hospital rollouts: corridors and elevators per site,known operator (pre-2026 knowledge),verify still operating
+Relay Robotics,hotel/hospital delivery,relayrobotics.com,Indoor delivery robots placed per building,known operator (pre-2026 knowledge),verify still operating
+Bear Robotics,restaurant/service robots,bearrobotics.ai,Service robots must fit dining floors,known operator (pre-2026 knowledge),verify still operating
+Richtech Robotics,service robots,richtechrobotics.com,Service and delivery robots in hospitality sites,known operator (pre-2026 knowledge),verify still operating
+Pudu Robotics,service and cleaning robots,pudurobotics.com,Large deployment volume; partners scope sites,known operator (pre-2026 knowledge),verify still operating
+Keenon Robotics,service robots,keenonrobotics.com,Delivery robots deployed by local partners per site,known operator (pre-2026 knowledge),verify still operating
+Brain Corp,autonomy for cleaning/retail robots,braincorp.com,BrainOS fleets enter many stores; site checks at scale,known operator (pre-2026 knowledge),verify still operating
+Avidbots,cleaning robots,avidbots.com,Floor-cleaning robots routed per facility,known operator (pre-2026 knowledge),verify still operating
+Gausium,cleaning robots,gausium.com,Cleaning robots deployed per building,known operator (pre-2026 knowledge),verify still operating
+LionsBot,cleaning robots,lionsbot.com,Cleaning robots per facility,known operator (pre-2026 knowledge),verify still operating
+Knightscope,security robots,knightscope.com,Patrol robots routed per property,known operator (pre-2026 knowledge),verify still operating
+Cobalt Robotics,indoor security robots,cobaltrobotics.com,Indoor patrol routes per office building,known operator (pre-2026 knowledge),verify still operating
+Simbe Robotics,retail inventory robots,simberobotics.com,Store aisles and clearances per store,known operator (pre-2026 knowledge),verify still operating
+Badger Technologies,retail robots,badger-technologies.com,Store robots per site,known operator (pre-2026 knowledge),verify still operating
+ANYbotics,industrial inspection robots,anybotics.com,Inspection routes planned per plant,known operator (pre-2026 knowledge),verify still operating
+Energy Robotics,inspection robot software,energy-robotics.com,Mission planning per site for inspection fleets,known operator (pre-2026 knowledge),verify still operating
+Serve Robotics,delivery robots,serverobotics.com,Building entry and indoor handoff routes,known operator (pre-2026 knowledge),verify fit (mostly sidewalk)
+InOrbit,robot fleet operations software (partner),inorbit.ai,Could resell site checks to its robot customers,known operator (pre-2026 knowledge),partner lead; verify
+Formant,robot fleet software (partner),formant.io,Partner channel to many robot companies,known operator (pre-2026 knowledge),partner lead; verify
+MRPX Tech,robot simulation services (partner or competitor),mrpxtech.com,Sells simulation sprints from $2000; could subcontract site capture,research notes (MRPX Tech site),decide partner vs competitor
+Scan2Plan,AEC reserve: scan-to-BIM service,scan2plan.io,Reality-capture service firm; could use processing for fast drafts,research notes,AEC reserve; verify
+The Future 3D,AEC reserve: scanning service,thefuture3d.com,Scanning service and pricing publisher,research notes,AEC reserve; verify

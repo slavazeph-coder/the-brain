@@ -1253,6 +1253,13 @@ export async function startServer() {
       res.set('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'walk', 'index.html'));
     });
+    // The developer platform is a standalone page too; its modules also load by relative URL.
+    app.get(['/platform', '/platform/'], (req, res) => {
+      const [pathname, search = ''] = req.originalUrl.split('?');
+      if (!pathname.endsWith('/')) return res.redirect(301, `/platform/${search ? `?${search}` : ''}`);
+      res.set('Cache-Control', 'no-cache');
+      res.sendFile(path.join(distPath, 'platform', 'index.html'));
+    });
     app.use(express.static(distPath, { index: false, setHeaders: setStaticCacheHeaders }));
 
     // Every route used to be served the identical index.html, so a shared

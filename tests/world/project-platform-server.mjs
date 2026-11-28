@@ -10,11 +10,12 @@ import { createMemoryProjectObjectStore } from './helpers/project-object-store.m
 const require = createRequire(new URL('../../brainsnn-r3f-app/package.json', import.meta.url));
 const express = require('express');
 
-export async function startProjectPlatformFixture({ directory, port = 0, objectStore = createMemoryProjectObjectStore() } = {}) {
+// tenantId: a test that counts projects or keys passes its own, because a shared CI database keeps earlier tests' rows.
+export async function startProjectPlatformFixture({ directory, port = 0, objectStore = createMemoryProjectObjectStore(), tenantId = 'tenant_browser_fixture' } = {}) {
   const pool = await createProjectTestPool({ directory });
   const service = createWorldProjectService({ pool, env: {}, objectStore });
   await service.initialize();
-  const tenant = await service.provisionTenant({ name: 'Browser test workspace', id: 'tenant_browser_fixture' });
+  const tenant = await service.provisionTenant({ name: 'Browser test workspace', id: tenantId });
   const credentials = {};
   for (const role of ['admin', 'editor', 'reviewer', 'reader']) {
     credentials[role] = await service.provisionKey({ tenant_id: tenant.id, actor_name: `Fixture ${role}`, role });

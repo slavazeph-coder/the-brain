@@ -23,11 +23,13 @@ It is a private operator-provisioned service. Public signup, browser session log
 
 | Surface | Location |
 | --- | --- |
+| Developer platform (sandbox, explorer, client review, keys, usage) | `/platform/` ([guide](developer-platform.md)) |
 | Saved project workspace | `/world/projects.html` |
 | API | `/api/world/v1` |
 | SDK | `/world/projects-client.mjs` |
 | OpenAPI contract | `/world/projects-api.openapi.json` |
 | Node quickstart | `examples/world-project-api.mjs` |
+| Record a world update for review | `examples/world-update-apply.mjs` ([the loop](world-update-loop.md)) |
 | Large-file upload/download example | `examples/world-project-large-source.mjs` |
 | API implementation | `brainsnn-r3f-app/src/server/worldProjectService.js` |
 | Durable store and schema | `brainsnn-r3f-app/src/server/worldProjectStore.js` |

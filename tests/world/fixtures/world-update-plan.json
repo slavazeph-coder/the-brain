@@ -1,0 +1,110 @@
+{
+ "schema": "brainsnn.project-request-plan.v1",
+ "source_sha256": "e4a7d863ffdf6b749a4bf31896ceeceb2f63a1275d83e3bc6294e8a1e63965a5",
+ "placeholders": {
+  "$as_is": "the project's current as-is revision id",
+  "$<ref>": "the id created by the earlier step with that ref"
+ },
+ "expected_version": "read from the project immediately before each step",
+ "steps": [
+  {
+   "ref": "source",
+   "action": "addSource",
+   "body": {
+    "name": "world-update-e4a7d863ffdf.json",
+    "media_type": "application/json",
+    "content_text": "{\n \"schema\": \"brainsnn.world-update.v1\",\n \"observer\": {\n  \"id\": \"robot-a\",\n  \"model\": \"Phone camera standing in for robot A\"\n },\n \"observe\": {\n  \"located\": 4,\n  \"submitted\": 4\n },\n \"thresholds\": {\n  \"cell_m\": 0.1,\n  \"min_obstacle_height_m\": 0.04,\n  \"height_tolerance_m\": 0.05,\n  \"near_model_m\": 0.1,\n  \"max_reprojection_px\": 2.0,\n  \"min_parallax_degrees\": 2.0,\n  \"free_space_radius_px\": 12.0,\n  \"free_space_margin_m\": 0.15,\n  \"min_cell_points\": 3,\n  \"min_candidate_points\": 15,\n  \"min_added_points\": 8,\n  \"assumed_depth_m\": 0.5,\n  \"min_removed_points\": 6,\n  \"min_occluder_cells\": 3,\n  \"candidate_ceiling_m\": 5.0\n },\n \"understand\": {\n  \"candidates\": [\n   {\n    \"id\": \"candidate-1\",\n    \"class\": \"added\",\n    \"points\": 1200,\n    \"points_seen_empty_before\": 400,\n    \"footprint_m\": {\n     \"across\": [\n      -0.9,\n      0.3\n     ],\n     \"along\": [\n      1.9,\n      2.0\n     ]\n    },\n    \"footprint_area_m2\": 0.26,\n    \"height_m\": [\n     0.09,\n     0.8\n    ],\n    \"cells\": [\n     [\n      10,\n      20\n     ],\n     [\n      11,\n      20\n     ]\n    ],\n    \"assumed_depth_m\": 0.5,\n    \"assumed_cells\": [\n     [\n      10,\n      21\n     ],\n     [\n      11,\n      21\n     ]\n    ],\n    \"assumed_area_m2\": 0.02\n   }\n  ]\n },\n \"adapt\": {\n  \"route\": {\n   \"start_m\": [\n    0,\n    0.6\n   ],\n   \"goal_m\": [\n    0,\n    3.2\n   ],\n   \"from\": \"request\"\n  },\n  \"robots\": [\n   {\n    \"id\": \"robot-a\",\n    \"model\": \"Small AMR (0.45 m square)\",\n    \"footprint_m\": [\n     0.45,\n     0.45\n    ],\n    \"height_m\": 0.6,\n    \"margin_m\": 0.05,\n    \"outcome\": \"rerouted\",\n    \"before\": {\n     \"length_m\": 2.6\n    },\n    \"after\": {\n     \"length_m\": 3.1\n    }\n   },\n   {\n    \"id\": \"robot-b\",\n    \"model\": \"Cart AMR (0.7 x 0.8 m)\",\n    \"footprint_m\": [\n     0.7,\n     0.8\n    ],\n    \"height_m\": 0.75,\n    \"margin_m\": 0.08,\n    \"outcome\": \"rerouted\",\n    \"before\": {\n     \"length_m\": 2.6\n    },\n    \"after\": {\n     \"length_m\": 3.1\n    }\n   }\n  ]\n },\n \"source\": {\n  \"reconstruction\": \"authored-job\",\n  \"reconstruction_sha256\": \"eea3fdaea180ee749961cb37966d31e5601013825417f0b1ba92c8a48a29ce00\"\n },\n \"authored_fixture\": \"Software fixture: no capture, robot or measurement.\"\n}",
+    "sha256": "e4a7d863ffdf6b749a4bf31896ceeceb2f63a1275d83e3bc6294e8a1e63965a5"
+   }
+  },
+  {
+   "ref": "evidence-candidate-1",
+   "action": "addEvidence",
+   "body": {
+    "revision_id": "$as_is",
+    "source_id": "$source",
+    "component_id": "candidate-1",
+    "kind": "observed",
+    "claim": "Phone camera standing in for robot A (robot-a) observed new geometry -0.9..0.3 m across and 1.9..2.0 m along the floor, 0.09..0.8 m high; the spot was seen empty in the as-is scan and is now occupied (1200 triangulated points, 400 seen empty before). A further 0.02 m2 behind it was not seen and is assumed occupied.",
+    "value": 0.26,
+    "unit": "m2",
+    "locator": {
+     "note": "world-update.json understand.candidates[0]; 4 located walk frames"
+    },
+    "uncertainty": 0.1
+   }
+  },
+  {
+   "ref": "revision-robot-a",
+   "action": "createRevision",
+   "body": {
+    "label": "Proposed: as-is plus observed change, for robot-a",
+    "kind": "proposed",
+    "source_ids": [
+     "$source"
+    ],
+    "robot": {
+     "model": "Small AMR (0.45 m square)",
+     "width_m": 0.45,
+     "margin_m": 0.05
+    },
+    "task": {
+     "kind": "route",
+     "goal": "Drive from [0, 0.6] to [0, 3.2] (floor metres). Outcome: rerouted, 3.1 m (was 2.6 m)."
+    },
+    "parent_revision_id": "$as_is"
+   }
+  },
+  {
+   "ref": "change-robot-a",
+   "action": "createChange",
+   "body": {
+    "base_revision_id": "$as_is",
+    "proposed_revision_id": "$revision-robot-a",
+    "title": "Observed change: adapt robot-a",
+    "reason": "robot-a saw 1 candidate change(s) on its walk; for robot-a (0.45 x 0.45 m, 0.6 m tall) its as-is route is blocked; a new route avoids the change. Planning preview only; confirm the evidence and approve before any robot uses this route.",
+    "evidence_ids": [
+     "$evidence-candidate-1"
+    ]
+   }
+  },
+  {
+   "ref": "revision-robot-b",
+   "action": "createRevision",
+   "body": {
+    "label": "Proposed: as-is plus observed change, for robot-b",
+    "kind": "proposed",
+    "source_ids": [
+     "$source"
+    ],
+    "robot": {
+     "model": "Cart AMR (0.7 x 0.8 m)",
+     "width_m": 0.8,
+     "margin_m": 0.08
+    },
+    "task": {
+     "kind": "route",
+     "goal": "Drive from [0, 0.6] to [0, 3.2] (floor metres). Outcome: rerouted, 3.1 m (was 2.6 m)."
+    },
+    "parent_revision_id": "$as_is"
+   }
+  },
+  {
+   "ref": "change-robot-b",
+   "action": "createChange",
+   "body": {
+    "base_revision_id": "$as_is",
+    "proposed_revision_id": "$revision-robot-b",
+    "title": "Observed change: adapt robot-b",
+    "reason": "robot-a saw 1 candidate change(s) on its walk; for robot-b (0.7 x 0.8 m, 0.75 m tall) its as-is route is blocked; a new route avoids the change. Planning preview only; confirm the evidence and approve before any robot uses this route.",
+    "evidence_ids": [
+     "$evidence-candidate-1"
+    ]
+   }
+  }
+ ],
+ "as_is_scan": {
+  "name": "reconstruction.json",
+  "sha256": "eea3fdaea180ee749961cb37966d31e5601013825417f0b1ba92c8a48a29ce00"
+ }
+}
