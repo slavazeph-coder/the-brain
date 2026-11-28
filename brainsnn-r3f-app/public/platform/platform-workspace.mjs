@@ -19,6 +19,14 @@ function viewHead(eyebrow, title, lead, ...extra) {
   return h('header', { class: 'pf-view-head' }, h('div', {}, h('p', { class: 'pf-eyebrow', text: eyebrow }), h('h1', { text: title }), lead ? h('p', { class: 'pf-muted', text: lead }) : null), ...extra);
 }
 const reasonOf = form => (new FormData(form).get('reason') || '').toString().trim();
+// Reasons being typed, by change and form, in page memory only. The view re-renders after every action (confirming
+// evidence reloads the project), and a half-typed reason must survive that. Cleared once the decision is recorded.
+const drafts = new Map();
+const reasonInput = (key, attrs) => {
+  const input = h('input', { ...attrs, value: drafts.get(key) || '' });
+  input.addEventListener('input', () => { if (input.value) drafts.set(key, input.value); else drafts.delete(key); });
+  return input;
+};
 
 // ---------------------------------------------------------------- projects
 
@@ -123,7 +131,7 @@ function changeCard(project, change) {
     if (can('project:write')) {
       const form = h('form', { class: 'pf-decide' },
         h('label', { class: 'pf-label', for: `pf-impl-${change.id}`, text: 'What was done on site' }),
-        h('input', { class: 'pf-input', id: `pf-impl-${change.id}`, name: 'reason', required: true, maxlength: '2000', placeholder: 'e.g. Route updated in the fleet manager' }),
+        reasonInput(`${change.id}:implemented`, { class: 'pf-input', id: `pf-impl-${change.id}`, name: 'reason', required: true, maxlength: '2000', placeholder: 'e.g. Route updated in the fleet manager' }),
         h('div', { class: 'pf-actions' }, h('button', { type: 'submit', class: 'pf-secondary', text: 'Mark done on site' })));
       form.addEventListener('submit', event => { event.preventDefault(); decide(project, change, 'implemented', reasonOf(form), form); });
       add(card, form);
@@ -150,7 +158,7 @@ function evidenceButtons(project, evidence) {
 function decisionForm(project, change, unconfirmed) {
   const form = h('form', { class: 'pf-decide' },
     h('label', { class: 'pf-label', for: `pf-reason-${change.id}`, text: 'Your reason (kept with the decision)' }),
-    h('input', { class: 'pf-input', id: `pf-reason-${change.id}`, name: 'reason', required: true, maxlength: '2000', placeholder: 'e.g. The crate is there; the new route is fine' }),
+    reasonInput(`${change.id}:decision`, { class: 'pf-input', id: `pf-reason-${change.id}`, name: 'reason', required: true, maxlength: '2000', placeholder: 'e.g. The crate is there; the new route is fine' }),
     unconfirmed ? h('p', { class: 'pf-note', text: `Confirm the ${unconfirmed === 1 ? 'evidence item' : `${unconfirmed} evidence items`} above before approving.` }) : null,
     h('div', { class: 'pf-actions' },
       h('button', { type: 'submit', class: 'pf-primary', name: 'decision', value: 'approve', disabled: unconfirmed > 0, text: 'Approve' }),
@@ -167,6 +175,7 @@ async function decide(project, change, decision, reason, form) {
   try {
     const fresh = (await api().getProject(project.id)).project;
     const { resource } = await api().decideChange(project.id, change.id, { expected_version: fresh.version, decision, reason });
+    drafts.delete(`${change.id}:${decision === 'implemented' ? 'implemented' : 'decision'}`);
     if (resource.status === 'approved') done('approve');
     toast(`${STATUS_WORDS[resource.status] || resource.status}: ${change.title}.`, 'ok');
     go(`#/projects/${project.id}`);

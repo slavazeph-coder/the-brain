@@ -37,8 +37,8 @@ It reuses the existing API, SDK and OpenAPI document. There is no new backend an
 
   A second scripted run checks two later outcomes on both. A later physical trial that fails withdraws a
   verification (the change goes stale). Two overlapping sends of one prepared request apply once: one source, one
-  version step. A third checks keys. A key narrowed to some of its role's scopes stays narrow. Scopes outside the
-  role, and expiry beyond 366 days, are refused.
+  version step. A third checks keys. A key narrowed to some of its role's scopes stays narrow. A write-only key can add a source but
+  cannot read the project back. Scopes outside the role, and expiry beyond 366 days, are refused.
 
 ## Security
 

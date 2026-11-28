@@ -72,8 +72,7 @@ footprints.
   - The table is in `docs/world-update-loop.md`.
 - **Tests:** `test_world_update.py` has 35 tests (about 3 min in CI). `world-update-plan.test.mjs` has 4 against the
   real service.
-- **Not committed:** the permission classifier refused `git commit` and `git push` on Nov 25. All files are on disk
-  only, waiting for the owner.
+- **Shipped:** merged in #340 on Nov 28 (see "Shipped" below).
 
 ## Developer platform (Nov 27, "dev platform for API side and client side, playful and easy")
 
@@ -90,7 +89,7 @@ footprints.
   - all 1,128 app unit tests;
   - a production build that serves `/platform/`;
   - the layers and front-door checks on the production build.
-- **Not committed:** git commit and push are refused by the permission classifier in this session.
+- **Shipped:** merged in #340 on Nov 28.
 
 ## Calm homepage (Nov 27, owner pasted nuancelabs.ai)
 
@@ -101,3 +100,24 @@ footprints.
 - **Network:** environment hosts added with the owner's approval: nuancelabs.ai, www., platform., and
   framerusercontent.com.
 - **Rest of the site:** still dark. A light theme for World Builder and Walk is the owner's call.
+
+## Shipped (Nov 28): #340 merged as bfde750a
+
+- **What went to main:** the loop, `/platform/`, the calm homepage and the pilot kit. Codex reviewed every push;
+  about 17 findings were fixed, each with a test that fails on the old code. Two were safety bugs in the loop:
+  - corner cutting: an "unchanged" route that now clips a new obstacle, and simplified shortcuts slipping between
+    blocked cells. `segment_steps`, `line_cells` and `path_free` fix both;
+  - candidates depended on the robots asked about. A crate seen only above a short robot produced nothing.
+    Candidates now go up to `candidate_ceiling_m` (5 m).
+- **Reporting fix:** unseen-space metrics are measured along the published segments (`route_visibility`).
+- **Sweep after all fixes:** the table is identical, 20 of 21 safe. If the widened band is also used for
+  `low_seen`, wall tops stop the assumed-depth march and coverage drops. Keep `low_seen` on the robot band.
+- **CI lessons:**
+  - The World Projects workflow shares one Postgres across steps. A test that counts projects or keys needs its own
+    `tenantId` (`startProjectPlatformFixture({ tenantId })`).
+  - Browser steps must wait for the new result, not for an element the previous result already shows. Reproduce
+    such races by delaying `page.route('**/api/world/v1/**')` by about 400 ms.
+- **Owner pushes to this branch too:** #341 added tests. On a rejected push, fetch and merge; never force.
+- **Network:** Node's built-in `fetch` in this sandbox needs `NODE_USE_ENV_PROXY=1` to reach the internet.
+- **Codex cadence:** each push draws about two yellow findings, mostly sandbox parity. Rule used: fix safety bugs and
+  red CI before merging; defer the rest to a follow-up PR.

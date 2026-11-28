@@ -271,7 +271,7 @@ function startToy() {
       const extra = p.before && p.after ? (planner.length(p.after) - planner.length(p.before)) * TOY.metresPerCell : 0;
       add(results, h('span', { class: `pf-chip pf-chip-${p.outcome}` },
         h('i', { class: `pf-swatch pf-swatch-${p.robot.id}`, 'aria-hidden': 'true' }),
-        `${p.robot.name} (${p.robot.note}): ${p.outcome}${p.outcome === 'rerouted' || p.outcome === 'shortened' ? ` ${extra >= 0 ? '+' : ''}${extra.toFixed(1)} m` : ''}`));
+        `${p.robot.name} (${p.robot.note}): ${p.outcome}${p.outcome === 'rerouted' || p.outcome === 'shortened' ? ` ${extra >= 0 ? '+' : ''}${extra.toFixed(Math.abs(extra) < 0.1 ? 2 : 1)} m` : ''}`));
     }
     canvas.setAttribute('aria-label', `Warehouse aisle with ${boxes.length} dropped box${boxes.length === 1 ? '' : 'es'}. ${plans.map(p => `${p.robot.name}: ${p.outcome}`).join('. ')}.`);
     frame = 0;
@@ -304,7 +304,8 @@ function startToy() {
       const [x, y] = point(along(path, Math.min(at, total)));
       ctx.fillStyle = css(p.robot.colour);
       ctx.beginPath(); ctx.arc(x, y, p.robot.radius * cw * .55, 0, Math.PI * 2); ctx.fill();
-      if (!p.after) { ctx.fillStyle = css('--pf-toy-text'); ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(`${p.robot.name}: blocked`, x + 12, y - 10 - (p.robot.id === 'b' ? 14 : 0)); }
+      // Blocked robots wait at the start; their labels go under the disc, clear of the "Start" label above it.
+      if (!p.after) { ctx.fillStyle = css('--pf-toy-text'); ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(`${p.robot.name}: blocked`, x - 24, y + p.robot.radius * cw * .55 + 16 + (p.robot.id === 'b' ? 16 : 0)); }
     }
     ctx.fillStyle = css('--pf-toy-text'); ctx.font = '600 12px system-ui, sans-serif';
     const [gx, gy] = point(TOY.goal); ctx.fillText('Goal', gx - 12, gy - 24);
