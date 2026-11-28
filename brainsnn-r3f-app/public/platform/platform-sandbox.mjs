@@ -84,7 +84,6 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
   const keys = new Map(); // token -> key record
   const projects = new Map();
   const ledger = new Map(); // `${key_id}:${idempotency}` -> { fingerprint, status, body }
-  let writeTail = Promise.resolve();
   const usage = { api_requests: 0, processing_jobs_started: 0, processing_upload_bytes: 0, processing_artifact_bytes: 0 };
   const time = () => new Date(now()).toISOString();
   const newId = prefix => `${prefix}_${randomHex(12)}`;
@@ -324,9 +323,10 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
         recorded_project_version: p.version + 1, origin: 'operator-reported', physical_validated: false, ...by };
       resource.prediction_agreed = resource.prediction === 'unknown' || resource.outcome === 'inconclusive' ? null : resource.prediction === resource.outcome;
       p.trials.push(resource);
+      // Like the service: a later physical trial that did not pass withdraws the verification it supersedes.
       if (resource.kind === 'physical' && resource.outcome !== 'pass' && latestPhysical(p.trials, revisionId)?.id === resource.id) {
         staleChanges(p, 'A later physical trial did not pass. The recorded verification needs a new review.',
-          change => change.status === 'verified' && change.proposed_revision_id === revisionId);
+          c => c.status === 'verified' && c.proposed_revision_id === revisionId);
       }
       eventType = 'trial.recorded';
     } else throw new SandboxError(404, 'not-found', 'This project action was not found.');
@@ -353,24 +353,33 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
     const principal = authenticate(headers);
     usage.api_requests += 1;
     if (method === 'POST') {
-      const key = headers.get('idempotency-key');
-      if (typeof key !== 'string' || !IDEMPOTENCY.test(key)) throw new SandboxError(400, 'idempotency-key-required', 'Send an Idempotency-Key of 16–128 letters, numbers, colons, underscores or hyphens.');
-      const fingerprint = canonical({ method, path, body });
-      const prior = ledger.get(`${principal.key.id}:${key}`);
-      if (prior) {
-        if (prior.fingerprint !== fingerprint) throw new SandboxError(409, 'idempotency-conflict', 'This Idempotency-Key was already used for another request.');
-        // Like the service: a project mutation replays its receipt against the project as it is now.
-        const current = prior.projectId && projects.get(prior.projectId);
-        const body = current ? { project: aggregate(current), ...(prior.result.body.resource ? { resource: prior.result.body.resource } : {}), applied_version: prior.appliedVersion }
-          : prior.result.body;
-        return { status: prior.result.status, body: clone(body), replay: true };
-      }
-      const result = await route(method, path, principal, body);
-      if (result.body.project) result.body.applied_version = result.body.project.version;
-      ledger.set(`${principal.key.id}:${key}`, { fingerprint, result: clone(result), projectId: result.body.project?.id, appliedVersion: result.body.applied_version });
-      return result;
+      // One mutation at a time, ledger lookup to receipt, as the service does under its tenant lock: two overlapping
+      // sends of one prepared request then replay instead of both applying.
+      const run = mutations.then(() => idempotent(method, path, headers, principal, body));
+      mutations = run.catch(() => {});
+      return run;
     }
     return route(method, path, principal, body);
+  }
+
+  let mutations = Promise.resolve();
+  async function idempotent(method, path, headers, principal, body) {
+    const key = headers.get('idempotency-key');
+    if (typeof key !== 'string' || !IDEMPOTENCY.test(key)) throw new SandboxError(400, 'idempotency-key-required', 'Send an Idempotency-Key of 16–128 letters, numbers, colons, underscores or hyphens.');
+    const fingerprint = canonical({ method, path, body });
+    const prior = ledger.get(`${principal.key.id}:${key}`);
+    if (prior) {
+      if (prior.fingerprint !== fingerprint) throw new SandboxError(409, 'idempotency-conflict', 'This Idempotency-Key was already used for another request.');
+      // Like the service: a project mutation replays its receipt against the project as it is now.
+      const current = prior.projectId && projects.get(prior.projectId);
+      const body = current ? { project: aggregate(current), ...(prior.result.body.resource ? { resource: prior.result.body.resource } : {}), applied_version: prior.appliedVersion }
+        : prior.result.body;
+      return { status: prior.result.status, body: clone(body), replay: true };
+    }
+    const result = await route(method, path, principal, body);
+    if (result.body.project) result.body.applied_version = result.body.project.version;
+    ledger.set(`${principal.key.id}:${key}`, { fingerprint, result: clone(result), projectId: result.body.project?.id, appliedVersion: result.body.applied_version });
+    return result;
   }
 
   async function route(method, path, principal, body) {
@@ -436,14 +445,6 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
     throw new SandboxError(404, 'not-found', 'This project action was not found.');
   }
 
-  // Production holds a tenant lock from ledger lookup through mutation and receipt storage.
-  // Each sandbox is one tenant. A rejected write must still release the next one.
-  function enqueueWrite(run) {
-    const result = writeTail.then(run);
-    writeTail = result.then(() => {}, () => {});
-    return result;
-  }
-
   async function fetchImpl(url, init = {}) {
     const headers = new Headers(init.headers || {});
     const method = (init.method || 'GET').toUpperCase();
@@ -459,8 +460,7 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
         try { body = JSON.parse(typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body)); } catch { bad('Send one JSON object.'); }
         if (!body || typeof body !== 'object' || Array.isArray(body)) bad('Send one JSON object.');
       } else if (!['GET', 'PUT'].includes(method)) throw new SandboxError(405, 'method-not-allowed', 'Use a documented GET, POST or upload-part PUT endpoint.');
-      const run = () => dispatch(method, path, headers, body);
-      const result = await (method === 'POST' ? enqueueWrite(run) : run());
+      const result = await dispatch(method, path, headers, body);
       return reply(result.status, result.body, result.replay ? { 'Idempotency-Replayed': 'true' } : {});
     } catch (error) {
       if (!(error instanceof SandboxError)) throw error;

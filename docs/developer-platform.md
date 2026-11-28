@@ -26,13 +26,18 @@ It reuses the existing API, SDK and OpenAPI document. There is no new backend an
 - **Nothing is sent or saved.** Processing, large uploads and exports answer `501 sandbox-not-simulated`.
 - **Held to the real service.** `tests/world/platform-sandbox.test.mjs` runs one scripted workflow through the SDK
   against the production handlers (PGlite) and against the sandbox. Statuses, error codes and response shapes must
-  match at every step. That includes 15 refusals:
+  match at every step. That includes 16 refusals:
   - an out-of-date version;
   - a reviewer approving before the evidence is confirmed;
   - the proposer approving their own change;
+  - an earlier physical pass offered after a later fail;
   - a reused idempotency key;
   - a revoked key;
   - and the rest.
+
+  A second scripted run checks two later outcomes on both. A later physical trial that fails withdraws a
+  verification (the change goes stale). Two overlapping sends of one prepared request apply once: one source, one
+  version step.
 
 ## Security
 
