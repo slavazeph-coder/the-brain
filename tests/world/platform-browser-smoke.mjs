@@ -34,6 +34,7 @@ const watch = page => {
   });
 };
 const toast = (page, text) => page.waitForFunction(value => document.getElementById('pf-toast')?.textContent.includes(value), text);
+const approvable = page => page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Approve' && !b.disabled));
 async function noOverflow(page, where) {
   const size = await page.evaluate(() => ({ width: innerWidth, html: document.documentElement.scrollWidth }));
   assert.ok(size.html <= size.width + 1, `${where}: horizontal overflow ${JSON.stringify(size)}`);
@@ -60,8 +61,10 @@ async function explorerSend(page, opId, expectStatus) {
   const refill = page.getByRole('button', { name: 'Refill from my session' });
   if (await refill.count()) await refill.click();
   const button = page.getByRole('button', { name: /^Send (GET|POST)/ });
+  // The last result stays on screen until the new response renders: mark it, then wait for a fresh one.
+  await page.evaluate(() => document.querySelectorAll('.pf-status').forEach(el => { el.dataset.stale = 'true'; }));
   await button.click();
-  await page.locator('.pf-status').waitFor();
+  await page.locator('.pf-status:not([data-stale])').waitFor();
   const status = (await page.locator('.pf-status').textContent()).trim();
   assert.equal(status, String(expectStatus), `${opId}: ${status} ${await page.locator('.pf-response').innerText()}`);
 }
@@ -113,6 +116,7 @@ try {
   assert.ok(await page.getByRole('button', { name: 'Approve' }).isDisabled(), 'approval waits for confirmed evidence');
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await toast(page, 'Evidence confirmed.');
+  await approvable(page);  // the view reloads the project before Approve is enabled; type the reason after that
   await page.getByLabel('Your reason (kept with the decision)').fill('The crate is in the walk frames; the route is fine.');
   await page.getByRole('button', { name: 'Approve' }).click();
   await toast(page, 'Approved:');
@@ -178,6 +182,7 @@ try {
   await p.getByRole('heading', { name: 'Warehouse aisle 4 (sample)' }).waitFor();
   await p.getByRole('button', { name: 'Confirm', exact: true }).click();
   await toast(p, 'Evidence confirmed.');
+  await approvable(p);
   await p.getByLabel('Your reason (kept with the decision)').fill('Looks right.');
   await p.getByRole('button', { name: 'Approve' }).click();
   await toast(p, 'Approved:');
