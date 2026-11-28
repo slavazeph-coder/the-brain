@@ -125,7 +125,8 @@ export function plan(before, after, radius, start, goal) {
   if (pathFree(a, was)) {
     const now = astar(a, start, goal);
     if (now && length(now) < length(was) - 1) return { outcome: 'shortened', before: simplify(was, b), after: simplify(now, a) };
-    return { outcome: 'unchanged', before: simplify(was, b), after: simplify(was, b) };
+    // Same cells, but straight shortcuts are drawn on the map each route is driven on: a new box can cut an old shortcut.
+    return { outcome: 'unchanged', before: simplify(was, b), after: simplify(was, a) };
   }
   const now = astar(a, start, goal);
   return { outcome: now ? 'rerouted' : 'blocked', before: simplify(was, b), after: simplify(now, a) };

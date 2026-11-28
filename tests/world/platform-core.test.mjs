@@ -104,6 +104,12 @@ test('the planner toy keeps the world-update outcomes: a box reroutes a robot, a
   assert.ok(planner.pathFree(corner, planner.astar(corner, [1, 1], [3, 3])) && !planner.pathFree(corner, [[1, 1], [2, 2], [3, 3]]));
   assert.ok(!planner.lineFree(corner, [1, 1], [3, 3]), 'a shortcut may not slip between blocked cells');
   assert.notDeepEqual(diag.after, [[1, 1], [3, 3]]);
+  // The cell route can stay clear while its old straight shortcut now crosses the new box: the after route is drawn on the new map.
+  const wide = planner.grid(10, 10), boxed = planner.grid(10, 10);
+  planner.setBox(boxed, 2, 2, 1, 1);
+  const kept = planner.plan(wide, boxed, 0, [1, 1], [8, 5]);
+  assert.equal(kept.outcome, 'unchanged');
+  for (let k = 1; k < kept.after.length; k++) assert.ok(planner.lineFree(boxed, kept.after[k - 1], kept.after[k]), JSON.stringify(kept.after));
   for (const path of [small.after, small.before]) {
     for (let k = 1; k < path.length; k++) assert.ok(planner.lineFree(planner.inflate(after, 1.5), path[k - 1], path[k]) || path === small.before);
   }
