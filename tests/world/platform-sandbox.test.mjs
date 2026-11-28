@@ -316,10 +316,16 @@ async function narrowedKey({ baseUrl, fetchImpl, tokens }) {
   const write = await attempt(() => narrow.createProject({ title: 'Should be refused' }));
   const outsideRole = await attempt(() => admin.createKey({ actor_name: 'Reader with write', role: 'reader', scopes: ['project:write'] }));
   const tooLong = await attempt(() => admin.createKey({ actor_name: 'Long key', role: 'reader', expires_at: new Date(Date.now() + 400 * 86400000).toISOString() }));
+  // Least privilege: a write-only editor key can add a source but not read the project back.
+  const writer = createProjectsClient({ apiKey: (await admin.createKey({ actor_name: 'Write-only editor', role: 'editor', scopes: ['project:write'] })).token, baseUrl, fetchImpl });
+  const made = await writer.createProject({ title: 'Write-only' });
+  const text = '{"scan":"write-only"}\n';
+  const sourced = await attempt(() => writer.addSource(made.project.id, { expected_version: made.project.version, name: 'w.json', media_type: 'application/json', content_text: text, sha256: sha(text) }));
+  const unreadable = await attempt(() => writer.getProject(made.project.id));
   const soon = new Date(Date.now() + 7 * 86400000).toISOString();
   const week = await admin.createKey({ actor_name: 'Week key', role: 'reader', expires_at: soon });
   return { scopes: issued.key.scopes, read: read.ok === true, write: write.code, outsideRole: outsideRole.code, tooLong: tooLong.code,
-    weekExpiry: week.key.expires_at === soon };
+    weekExpiry: week.key.expires_at === soon, writeOnlyAddsSource: sourced.ok === true && sourced.body.resource.name === 'w.json', writeOnlyRead: unreadable.code };
 }
 
 test('a key narrowed to some of its role\'s scopes stays narrow, and key rules match the service', async () => {
@@ -329,7 +335,8 @@ test('a key narrowed to some of its role\'s scopes stays narrow, and key rules m
       tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) });
     const sandbox = createSandboxApi();
     const simulated = await narrowedKey({ baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals });
-    assert.deepEqual(real, { scopes: ['project:read'], read: true, write: 'forbidden', outsideRole: 'invalid-input', tooLong: 'invalid-input', weekExpiry: true });
+    assert.deepEqual(real, { scopes: ['project:read'], read: true, write: 'forbidden', outsideRole: 'invalid-input', tooLong: 'invalid-input', weekExpiry: true,
+      writeOnlyAddsSource: true, writeOnlyRead: 'forbidden' });
     assert.deepEqual(simulated, real);
   } finally {
     await fixture.close();

@@ -114,10 +114,13 @@ try {
   await page.locator('.pf-project').first().click();
   await page.getByRole('heading', { name: 'Waiting on you' }).waitFor();
   assert.ok(await page.getByRole('button', { name: 'Approve' }).isDisabled(), 'approval waits for confirmed evidence');
+  // A reason typed before confirming the evidence survives the reload that confirming triggers.
+  const reasonText = 'The crate is in the walk frames; the route is fine.';
+  await page.getByLabel('Your reason (kept with the decision)').fill(reasonText);
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await toast(page, 'Evidence confirmed.');
-  await approvable(page);  // the view reloads the project before Approve is enabled; type the reason after that
-  await page.getByLabel('Your reason (kept with the decision)').fill('The crate is in the walk frames; the route is fine.');
+  await approvable(page);
+  assert.equal(await page.getByLabel('Your reason (kept with the decision)').inputValue(), reasonText, 'the typed reason survives the reload');
   await page.getByRole('button', { name: 'Approve' }).click();
   await toast(page, 'Approved:');
   await page.getByText('approved a change').first().waitFor();

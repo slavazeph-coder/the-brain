@@ -437,7 +437,8 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
     const projectMatch = path.match(/^\/projects\/([a-z0-9_-]+)(?:\/([a-z]+)(?:\/([a-z0-9_-]+)(?:\/(review|decisions|content))?)?)?$/);
     if (projectMatch) {
       const [, projectId, action, resourceId, verb] = projectMatch;
-      scope(principal, 'project:read');
+      // Like the service: reading needs project:read; each mutation checks its own write or review scope.
+      if (method === 'GET') scope(principal, 'project:read');
       const p = project(projectId);
       if (method === 'GET' && !action) return { status: 200, body: { project: aggregate(p) } };
       if (method === 'GET' && action === 'sources' && resourceId && !verb) {

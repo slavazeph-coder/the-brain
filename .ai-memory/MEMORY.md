@@ -24,7 +24,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
-→ [One robot sees, another adapts](world-update-loop-2026-11-25.md) — Nov 25: XIO AI = platform, BrainSNN = engine, extend #321. Phone-as-robot-A walk → located → change found (seen-empty test) → proposed for review via #321 → per-robot reroute. Rendered-room proof; real room next.
+→ [One robot sees, another adapts](world-update-loop-2026-11-25.md) — Nov 25: XIO AI = platform, BrainSNN = engine, extend #321. Phone-as-robot-A walk → located → change found (seen-empty test) → proposed for review via #321 → per-robot reroute. Rendered-room proof; real room next. Shipped in #340 (Nov 28, bfde750a) with /platform/ and the calm homepage.
 
 → [Photo and video depth review](world-depth-workbench-2026-11-23.md) — native frame/pixel/point review, pinned MoGe worker baseline, source identity checks and disabled separately licensed Depth Pro 2 connector; coordinated robot/scan release approved.
 
