@@ -323,6 +323,11 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
         recorded_project_version: p.version + 1, origin: 'operator-reported', physical_validated: false, ...by };
       resource.prediction_agreed = resource.prediction === 'unknown' || resource.outcome === 'inconclusive' ? null : resource.prediction === resource.outcome;
       p.trials.push(resource);
+      // Like the service: a later physical trial that did not pass withdraws the verification it supersedes.
+      if (resource.kind === 'physical' && resource.outcome !== 'pass' && latestPhysical(p.trials, revisionId)?.id === resource.id) {
+        staleChanges(p, 'A later physical trial did not pass. The recorded verification needs a new review.',
+          c => c.status === 'verified' && c.proposed_revision_id === revisionId);
+      }
       eventType = 'trial.recorded';
     } else throw new SandboxError(404, 'not-found', 'This project action was not found.');
     p.version += 1; p.updated_at = time();
@@ -348,24 +353,33 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
     const principal = authenticate(headers);
     usage.api_requests += 1;
     if (method === 'POST') {
-      const key = headers.get('idempotency-key');
-      if (typeof key !== 'string' || !IDEMPOTENCY.test(key)) throw new SandboxError(400, 'idempotency-key-required', 'Send an Idempotency-Key of 16–128 letters, numbers, colons, underscores or hyphens.');
-      const fingerprint = canonical({ method, path, body });
-      const prior = ledger.get(`${principal.key.id}:${key}`);
-      if (prior) {
-        if (prior.fingerprint !== fingerprint) throw new SandboxError(409, 'idempotency-conflict', 'This Idempotency-Key was already used for another request.');
-        // Like the service: a project mutation replays its receipt against the project as it is now.
-        const current = prior.projectId && projects.get(prior.projectId);
-        const body = current ? { project: aggregate(current), ...(prior.result.body.resource ? { resource: prior.result.body.resource } : {}), applied_version: prior.appliedVersion }
-          : prior.result.body;
-        return { status: prior.result.status, body: clone(body), replay: true };
-      }
-      const result = await route(method, path, principal, body);
-      if (result.body.project) result.body.applied_version = result.body.project.version;
-      ledger.set(`${principal.key.id}:${key}`, { fingerprint, result: clone(result), projectId: result.body.project?.id, appliedVersion: result.body.applied_version });
-      return result;
+      // One mutation at a time, ledger lookup to receipt, as the service does under its tenant lock: two overlapping
+      // sends of one prepared request then replay instead of both applying.
+      const run = mutations.then(() => idempotent(method, path, headers, principal, body));
+      mutations = run.catch(() => {});
+      return run;
     }
     return route(method, path, principal, body);
+  }
+
+  let mutations = Promise.resolve();
+  async function idempotent(method, path, headers, principal, body) {
+    const key = headers.get('idempotency-key');
+    if (typeof key !== 'string' || !IDEMPOTENCY.test(key)) throw new SandboxError(400, 'idempotency-key-required', 'Send an Idempotency-Key of 16–128 letters, numbers, colons, underscores or hyphens.');
+    const fingerprint = canonical({ method, path, body });
+    const prior = ledger.get(`${principal.key.id}:${key}`);
+    if (prior) {
+      if (prior.fingerprint !== fingerprint) throw new SandboxError(409, 'idempotency-conflict', 'This Idempotency-Key was already used for another request.');
+      // Like the service: a project mutation replays its receipt against the project as it is now.
+      const current = prior.projectId && projects.get(prior.projectId);
+      const body = current ? { project: aggregate(current), ...(prior.result.body.resource ? { resource: prior.result.body.resource } : {}), applied_version: prior.appliedVersion }
+        : prior.result.body;
+      return { status: prior.result.status, body: clone(body), replay: true };
+    }
+    const result = await route(method, path, principal, body);
+    if (result.body.project) result.body.applied_version = result.body.project.version;
+    ledger.set(`${principal.key.id}:${key}`, { fingerprint, result: clone(result), projectId: result.body.project?.id, appliedVersion: result.body.applied_version });
+    return result;
   }
 
   async function route(method, path, principal, body) {

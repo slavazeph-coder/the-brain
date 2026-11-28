@@ -186,3 +186,66 @@ test('the sandbox retains a large inline source within the 512 KiB limit', async
   assert.equal(added.resource.bytes, content_text.length);
   assert.equal(added.resource.sha256, sha(content_text));
 });
+
+/** Two later outcomes the sandbox must share with the service: a verification withdrawn by a later failing physical
+ * trial, and two overlapping sends of one prepared mutation applying once. */
+async function laterOutcomes({ baseUrl, fetchImpl, tokens }) {
+  const client = role => createProjectsClient({ apiKey: tokens[role], baseUrl, fetchImpl });
+  const editor = client('editor'), reviewer = client('reviewer');
+  let { project } = await editor.createProject({ title: 'Later outcomes' });
+  const text = '{"scan":"as-is"}\n';
+  const source = await editor.addSource(project.id, { expected_version: project.version, name: 'scan.json', media_type: 'application/json', content_text: text, sha256: sha(text) });
+  project = source.project;
+  const robot = { model: 'Cart AMR', width_m: 0.7, margin_m: 0.08 };
+  const asIs = await editor.createRevision(project.id, { expected_version: project.version, label: 'As-is', kind: 'as_is', source_ids: [source.resource.id], robot, task: { kind: 'route', goal: 'Dock.' } });
+  project = asIs.project;
+  const proposed = await editor.createRevision(project.id, { expected_version: project.version, label: 'Proposed', kind: 'proposed', source_ids: [source.resource.id], robot,
+    task: { kind: 'route', goal: 'Dock around the crate.' }, parent_revision_id: asIs.resource.id });
+  project = proposed.project;
+  const evidence = await editor.addEvidence(project.id, { expected_version: project.version, revision_id: asIs.resource.id, source_id: source.resource.id,
+    component_id: 'crate', kind: 'observed', claim: 'A crate stands in the aisle.', value: 0.6, unit: 'm2', locator: { note: 'frame 2' }, uncertainty: 0.1 });
+  project = evidence.project;
+  const change = await editor.createChange(project.id, { expected_version: project.version, base_revision_id: asIs.resource.id, proposed_revision_id: proposed.resource.id,
+    title: 'Route around the crate', reason: 'The walk saw a crate.', evidence_ids: [evidence.resource.id] });
+  project = change.project;
+  project = (await reviewer.reviewEvidence(project.id, evidence.resource.id, { expected_version: project.version, decision: 'confirmed', reason: 'Seen.' })).project;
+  project = (await reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'approve', reason: 'Real.' })).project;
+  project = (await editor.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'implemented', reason: 'Route updated.' })).project;
+  const measured = await editor.addEvidence(project.id, { expected_version: project.version, revision_id: proposed.resource.id, source_id: source.resource.id,
+    component_id: 'aisle', kind: 'measured', claim: 'Clearance past the crate.', value: 0.42, unit: 'm', locator: { note: 'tape' }, uncertainty: 0.01 });
+  project = measured.project;
+  project = (await reviewer.reviewEvidence(project.id, measured.resource.id, { expected_version: project.version, decision: 'confirmed', reason: 'Tape photo.' })).project;
+  const at = Date.now() + 1000;
+  const trial = (outcome, when) => editor.createTrial(project.id, { expected_version: project.version, revision_id: proposed.resource.id, robot_model: 'Cart AMR',
+    task: 'Dock around the crate.', kind: 'physical', outcome, prediction: 'pass', source_ids: [source.resource.id], measurement_evidence_ids: [measured.resource.id],
+    notes: 'Contract fixture.', occurred_at: new Date(when).toISOString() });
+  const passed = await trial('pass', at);
+  project = passed.project;
+  const verified = await reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'verified', reason: 'Passed on site.', trial_id: passed.resource.id });
+  project = verified.project;
+  project = (await trial('fail', at + 1000)).project;
+  const withdrawn = (await reviewer.getProject(project.id)).project.changes.find(c => c.id === change.resource.id);
+
+  const before = (await editor.getProject(project.id)).project;
+  const text2 = '{"walk":"later"}\n';
+  const prepared = editor.prepareMutation('addSource', [project.id, { expected_version: before.version, name: 'later.json', media_type: 'application/json', content_text: text2, sha256: sha(text2) }]);
+  const [first, second] = await Promise.all([prepared.run(), prepared.run()]);
+  const after = (await editor.getProject(project.id)).project;
+  return { verifiedThen: verified.resource.status, withdrawn: withdrawn.status, reason: withdrawn.stale_reason,
+    sameSource: first.resource.id === second.resource.id, copies: after.sources.filter(s => s.name === 'later.json').length, versionStep: after.version - before.version };
+}
+
+test('a later failing physical trial withdraws a verification, and overlapping sends of one prepared request apply once', async () => {
+  const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_later_${randomUUID().slice(0, 8)}` });
+  try {
+    const real = await laterOutcomes({ baseUrl: `${fixture.url}/api/world/v1`,
+      tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) });
+    const sandbox = createSandboxApi();
+    const simulated = await laterOutcomes({ baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals });
+    assert.deepEqual(real, { verifiedThen: 'verified', withdrawn: 'stale', reason: 'A later physical trial did not pass. The recorded verification needs a new review.',
+      sameSource: true, copies: 1, versionStep: 1 });
+    assert.deepEqual(simulated, real);
+  } finally {
+    await fixture.close();
+  }
+});
