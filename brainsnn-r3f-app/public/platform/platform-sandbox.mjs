@@ -88,12 +88,24 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
   const time = () => new Date(now()).toISOString();
   const newId = prefix => `${prefix}_${randomHex(12)}`;
 
-  function provision(actorName, role, actorId) {
-    let actor = actorId ? actors.get(actorId) : null;
-    if (!actor) { actor = { id: newId('actor'), name: actorName, role }; actors.set(actor.id, actor); }
+  // The service's provisioning rules (worldProjectStore.provisionKey): a key may be narrowed to some of its role's
+  // scopes, expires within 366 days, and an existing principal must match exactly.
+  function provision(actorName, role, actorId, scopes = ROLE_SCOPES[role], expiresAt) {
+    if (!Array.isArray(scopes) || !scopes.length || new Set(scopes).size !== scopes.length || scopes.some(s => !ROLE_SCOPES[role].includes(s))) {
+      bad('Scopes must be distinct permissions available to the assigned role.');
+    }
+    if (expiresAt !== undefined && (typeof expiresAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(expiresAt))) bad('Use an ISO timestamp for credential expiry.');
+    const expiry = expiresAt === undefined ? new Date(now() + 30 * 86400000) : new Date(expiresAt);
+    if (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= now() || expiry.getTime() > now() + 366 * 86400000) bad('Key expiry must be in the next 366 days.');
+    if (keys.size >= LIMITS.keys) throw new SandboxError(429, 'key-limit', 'This workspace reached its retained credential limit.');
+    let actor = null;
+    if (actorId) {
+      actor = actors.get(actorId);
+      if (!actor || actor.name !== actorName || actor.role !== role) bad('Existing principal identity and role must match exactly.');
+    } else { actor = { id: newId('actor'), name: actorName, role }; actors.set(actor.id, actor); }
     const token = `bsk_${randomHex(21)}${'s'}`; // 43 characters after bsk_, like a real key
-    const key = { id: newId('key'), actor_id: actor.id, actor_name: actor.name, role, scopes: [...ROLE_SCOPES[role]],
-      expires_at: new Date(now() + 30 * 86400000).toISOString(), revoked_at: null, created_at: time() };
+    const key = { id: newId('key'), actor_id: actor.id, actor_name: actor.name, role, scopes: [...scopes],
+      expires_at: expiry.toISOString(), revoked_at: null, created_at: time() };
     keys.set(token, key);
     return { key, token, token_available: true };
   }
@@ -410,8 +422,7 @@ export function createSandboxApi({ now = () => Date.now(), tenantName = SANDBOX_
       if (method === 'POST') {
         shape(body, ['actor_name', 'actor_id', 'role', 'scopes', 'expires_at'], ['actor_name', 'role']);
         if (!Object.hasOwn(ROLE_SCOPES, body.role) || typeof body.actor_name !== 'string' || !body.actor_name.trim() || body.actor_name.length > 120) bad('Choose a named principal and a supported role.');
-        if (keys.size >= LIMITS.keys) throw new SandboxError(429, 'key-limit', 'This workspace reached its retained credential limit.');
-        const issued = provision(body.actor_name.trim(), body.role, body.actor_id);
+        const issued = provision(body.actor_name.trim(), body.role, body.actor_id, body.scopes ?? ROLE_SCOPES[body.role], body.expires_at);
         return { status: 201, body: { key: clone(issued.key), token: issued.token, token_available: true } };
       }
     }

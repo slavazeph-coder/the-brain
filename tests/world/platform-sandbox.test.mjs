@@ -249,3 +249,33 @@ test('a later failing physical trial withdraws a verification, and overlapping s
     await fixture.close();
   }
 });
+
+/** An admin narrows a new key to some of its role's scopes, as the service allows; the sandbox must keep the narrowing. */
+async function narrowedKey({ baseUrl, fetchImpl, tokens }) {
+  const admin = createProjectsClient({ apiKey: tokens.admin, baseUrl, fetchImpl });
+  const attempt = async run => { try { const body = await run(); return { ok: true, body }; } catch (error) { return { status: error.status, code: error.code }; } };
+  const issued = await admin.createKey({ actor_name: 'Narrow editor', role: 'editor', scopes: ['project:read'] });
+  const narrow = createProjectsClient({ apiKey: issued.token, baseUrl, fetchImpl });
+  const read = await attempt(() => narrow.listProjects());
+  const write = await attempt(() => narrow.createProject({ title: 'Should be refused' }));
+  const outsideRole = await attempt(() => admin.createKey({ actor_name: 'Reader with write', role: 'reader', scopes: ['project:write'] }));
+  const tooLong = await attempt(() => admin.createKey({ actor_name: 'Long key', role: 'reader', expires_at: new Date(Date.now() + 400 * 86400000).toISOString() }));
+  const soon = new Date(Date.now() + 7 * 86400000).toISOString();
+  const week = await admin.createKey({ actor_name: 'Week key', role: 'reader', expires_at: soon });
+  return { scopes: issued.key.scopes, read: read.ok === true, write: write.code, outsideRole: outsideRole.code, tooLong: tooLong.code,
+    weekExpiry: week.key.expires_at === soon };
+}
+
+test('a key narrowed to some of its role\'s scopes stays narrow, and key rules match the service', async () => {
+  const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_keys_${randomUUID().slice(0, 8)}` });
+  try {
+    const real = await narrowedKey({ baseUrl: `${fixture.url}/api/world/v1`,
+      tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) });
+    const sandbox = createSandboxApi();
+    const simulated = await narrowedKey({ baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals });
+    assert.deepEqual(real, { scopes: ['project:read'], read: true, write: 'forbidden', outsideRole: 'invalid-input', tooLong: 'invalid-input', weekExpiry: true });
+    assert.deepEqual(simulated, real);
+  } finally {
+    await fixture.close();
+  }
+});

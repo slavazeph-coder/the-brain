@@ -65,6 +65,8 @@ THRESHOLDS = {
     'assumed_depth_m': 0.5,        # unseen space behind a change, up to this deep, is assumed occupied (request may change it)
     'min_removed_points': 6,       # as-is points the walk looked straight through that make a removal
     'min_occluder_cells': 3,       # cells hidden from three or more frames (and most that view them), crossed by no seen ray
+    'candidate_ceiling_m': 5.0,    # new geometry up to this height (the tallest robot a request accepts) is a candidate; whether
+                                   # it blocks a given robot is then decided by its height and the floor seen beneath it
 }
 LIMITS = [
     'A removal is found only where the walk looked straight through the old spot to a surface behind it; anything the '
@@ -652,12 +654,16 @@ def update(workspace: Path, source_dir: Path, frames, request: dict, scratch: Pa
     np.minimum.at(nearest, qi, distance)
     on_model = np.isfinite(nearest)
     walk_height = height(walk) if len(walk) else np.zeros(0)
-    in_band = (walk_height >= thresholds['min_obstacle_height_m']) & (walk_height <= max_height + thresholds['height_tolerance_m'])
+    # Candidates do not depend on which robots are asked about: a crate seen only by its top strip, above a short robot,
+    # must still reach the floor-beneath rule below, or the short robot would be routed through it.
+    candidate_top = max(thresholds['candidate_ceiling_m'], max_height) + thresholds['height_tolerance_m']
+    in_band = (walk_height >= thresholds['min_obstacle_height_m']) & (walk_height <= candidate_top)
+    robot_band = (walk_height >= thresholds['min_obstacle_height_m']) & (walk_height <= max_height + thresholds['height_tolerance_m'])
     off = np.flatnonzero(~on_model & in_band)
     views = as_is_views(model)
     support = seen_through(views, walk[off], unit, thresholds)
     registration = {'walk_points': int(len(walk)), 'frame_pairs': len(clouds), 'on_as_is_model': int(on_model.sum()),
-                    'off_model_in_robot_band': int(len(off))}
+                    'off_model_in_robot_band': int((~on_model & robot_band).sum()), 'off_model_candidate_points': int(len(off))}
     if on_model.any():
         registration.update(median_distance_m=round(float(np.median(nearest[on_model])), 4),
                             p90_distance_m=round(float(np.percentile(nearest[on_model], 90)), 4))
@@ -748,7 +754,8 @@ def update(workspace: Path, source_dir: Path, frames, request: dict, scratch: Pa
     # The march behind a change stops where the walk saw the floor or unchanged as-is geometry: proof the space is not
     # part of the object. (Points on the object itself, such as a slab's top, are no such proof.)
     floor_points = np.abs(walk_height) < thresholds['min_obstacle_height_m']
-    low_seen = (grid.counts(to_floor(walk[floor_points])) + grid.counts(to_floor(walk[on_model & in_band]))) > 0
+    # Unchanged geometry the robots could meet is that proof; unchanged geometry overhead (a wall's top) is not.
+    low_seen = (grid.counts(to_floor(walk[floor_points])) + grid.counts(to_floor(walk[on_model & robot_band]))) > 0
     assumed_cells = {}
     for candidate in candidates:
         if candidate['class'] == 'removed':

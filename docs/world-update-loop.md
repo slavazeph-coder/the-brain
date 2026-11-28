@@ -75,6 +75,9 @@ Outputs in `update/`:
   separately as `assumed_cells`.
 - **Nothing passes under what was not seen:** new geometry blocks every robot unless the walk saw the floor beneath it
   from a camera lower than it. A crate's top strip seen from 1.5 m looks just like a table edge.
+- **The robots asked about do not change what is found:** new geometry up to `candidate_ceiling_m` (5 m, the tallest
+  robot a request accepts) becomes a candidate whatever robots the request names. A crate seen only by its top strip,
+  above a 0.6 m robot, still blocks that robot when it is asked about alone.
 
 ## Stress test: 21 rendered scenarios scored against authored truth
 

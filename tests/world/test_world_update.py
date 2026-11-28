@@ -287,9 +287,11 @@ def test_one_robot_sees_a_new_crate_and_robots_of_other_sizes_reroute(room):
             continue
         if other['class'] == 'occluder':  # unseen space directly behind the crate may be flagged as hidden, never in front
             assert other['footprint_m']['along'][0] >= CRATE['z'][0] - .1
-        else:  # whatever else the tilted walk saw first (wall strips) is coverage, away from the crate
+        else:  # whatever else the tilted walk saw first (wall strips, up to the candidate ceiling) is coverage, away from the crate
             assert other['class'] == 'newly_observed'
-            assert other['footprint_m']['across'][0] > CRATE['x'][1] + .5 or other['footprint_m']['across'][1] < CRATE['x'][0] - .5
+            across, along = other['footprint_m']['across'], other['footprint_m']['along']
+            assert (across[0] > CRATE['x'][1] + .5 or across[1] < CRATE['x'][0] - .5
+                    or along[0] > CRATE['z'][1] + .5 or along[1] < CRATE['z'][0] - .5), other
 
     # Remember: proposed for review, never applied.
     assert result['status'] == 'change-detected'
@@ -320,6 +322,29 @@ def test_one_robot_sees_a_new_crate_and_robots_of_other_sizes_reroute(room):
     assert svg.startswith('<svg') and 'robot-b: rerouted' in svg
     assert {a['name'] for a in json.loads((out / 'manifest.json').read_text())['artifacts']} == {
         'world-update.json', 'project-requests.json', 'world-update.svg'}
+
+
+def test_a_crate_seen_only_above_a_short_robot_still_blocks_it_whoever_else_is_asked_about(room):
+    """A plain box whose only features are a strip at 0.70-0.80 m, seen from two frames (too few for occluder detection),
+    asked about for the 0.6 m robot alone. Nothing showed free floor under that strip, so the robot may not drive under it,
+    and the answer must not change when a taller robot is added to the request."""
+    from world_update_scene import CRATE, box
+    scene, root, source = room
+    crate = [{**box(CRATE['x'], CRATE['z'], .7), 'texture': None}, box(CRATE['x'], CRATE['z'], .1, lift=.7)]
+    walk = [{'centre': [x, 0., .2], 'pitch': 15.} for x in (-.25, .25)]
+    frames, _ = scene.walk(root / 'top-strip-walk', walk, crate)
+    alone = wu.run(source, frames, {**REQUEST, 'robots': ROBOTS[:1]}, root / 'top-strip-alone')
+    both = wu.run(source, frames, REQUEST, root / 'top-strip-both')
+    assert alone['observe']['located'] == 2
+    strip = [c for c in alone['understand']['candidates'] if c['class'] != 'removed' and c['height_m'][1] > .65]
+    assert strip, alone['understand']['candidates']
+    small_alone, small_both = alone['adapt']['robots'][0], both['adapt']['robots'][0]
+    assert small_alone['outcome'] in ('rerouted', 'blocked'), small_alone['outcome']
+    assert small_alone['outcome'] == small_both['outcome']
+    if small_alone['after']:
+        assert route_clearance(small_alone['after']['waypoints'], {'x': CRATE['x'], 'z': CRATE['z']}) >= \
+            small_alone['clearance_radius_m'] - wu.THRESHOLDS['cell_m']
+    assert [c['id'] for c in alone['understand']['candidates']] == [c['id'] for c in both['understand']['candidates']]
 
 
 def test_an_unchanged_room_proposes_no_change_and_keeps_every_route(room):
