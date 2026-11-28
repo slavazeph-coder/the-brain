@@ -187,9 +187,7 @@ test('the sandbox retains a large inline source within the 512 KiB limit', async
   assert.equal(added.resource.sha256, sha(content_text));
 });
 
-/** Two later outcomes the sandbox must share with the service: a verification withdrawn by a later failing physical
- * trial, and two overlapping sends of one prepared mutation applying once. */
-async function laterOutcomes({ baseUrl, fetchImpl, tokens }) {
+async function checkTrialInvalidation({ baseUrl, fetchImpl, tokens }, unsuccessfulOutcome) {
   const client = role => createProjectsClient({ apiKey: tokens[role], baseUrl, fetchImpl });
   const editor = client('editor'), reviewer = client('reviewer');
   let { project } = await editor.createProject({ title: 'Later outcomes' });
@@ -216,35 +214,93 @@ async function laterOutcomes({ baseUrl, fetchImpl, tokens }) {
   project = measured.project;
   project = (await reviewer.reviewEvidence(project.id, measured.resource.id, { expected_version: project.version, decision: 'confirmed', reason: 'Tape photo.' })).project;
   const at = Date.now() + 1000;
-  const trial = (outcome, when) => editor.createTrial(project.id, { expected_version: project.version, revision_id: proposed.resource.id, robot_model: 'Cart AMR',
-    task: 'Dock around the crate.', kind: 'physical', outcome, prediction: 'pass', source_ids: [source.resource.id], measurement_evidence_ids: [measured.resource.id],
+  const trial = (outcome, when, kind = 'physical', revision = proposed.resource) => editor.createTrial(project.id, {
+    expected_version: project.version, revision_id: revision.id, robot_model: revision.robot.model, task: revision.task.goal,
+    kind, outcome, prediction: 'pass', source_ids: [source.resource.id], measurement_evidence_ids: revision.id === proposed.resource.id ? [measured.resource.id] : [],
     notes: 'Contract fixture.', occurred_at: new Date(when).toISOString() });
   const passed = await trial('pass', at);
   project = passed.project;
   const verified = await reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'verified', reason: 'Passed on site.', trial_id: passed.resource.id });
+  assert.equal(verified.resource.status, 'verified');
   project = verified.project;
-  project = (await trial('fail', at + 1000)).project;
-  const withdrawn = (await reviewer.getProject(project.id)).project.changes.find(c => c.id === change.resource.id);
-
-  const before = (await editor.getProject(project.id)).project;
-  const text2 = '{"walk":"later"}\n';
-  const prepared = editor.prepareMutation('addSource', [project.id, { expected_version: before.version, name: 'later.json', media_type: 'application/json', content_text: text2, sha256: sha(text2) }]);
-  const [first, second] = await Promise.all([prepared.run(), prepared.run()]);
-  const after = (await editor.getProject(project.id)).project;
-  return { verifiedThen: verified.resource.status, withdrawn: withdrawn.status, reason: withdrawn.stale_reason,
-    sameSource: first.resource.id === second.resource.id, copies: after.sources.filter(s => s.name === 'later.json').length, versionStep: after.version - before.version };
+  const recordedChange = p => p.changes.find(c => c.id === change.resource.id);
+  project = (await trial('fail', at - 1)).project;
+  assert.equal(recordedChange(project).status, 'verified', 'backdated physical trial');
+  project = (await trial('fail', at + 1000, 'simulation')).project;
+  assert.equal(recordedChange(project).status, 'verified', 'later simulation');
+  project = (await trial('fail', at + 1000, 'physical', asIs.resource)).project;
+  assert.equal(recordedChange(project).status, 'verified', 'later physical trial on another revision');
+  // The later record wins on recorded_project_version when occurrence times tie.
+  const when = unsuccessfulOutcome === 'inconclusive' ? at : at + 1000;
+  const unsuccessful = await trial(unsuccessfulOutcome, when);
+  assert.equal(unsuccessful.project.version, project.version + 1);
+  const readBack = (await reviewer.getProject(project.id)).project;
+  const withdrawn = recordedChange(readBack);
+  assert.equal(withdrawn.status, 'stale', `latest physical outcome: ${unsuccessfulOutcome}`);
+  assert.equal(withdrawn.stale_reason, 'A later physical trial did not pass. The recorded verification needs a new review.');
+  assert.ok(Number.isFinite(Date.parse(withdrawn.stale_at)));
+  assert.equal(readBack.readiness.counts.stale_changes, 1);
 }
 
-test('a later failing physical trial withdraws a verification, and overlapping sends of one prepared request apply once', async () => {
+async function checkConcurrentSources({ baseUrl, fetchImpl = fetch, tokens }) {
+  const editor = createProjectsClient({ apiKey: tokens.editor, baseUrl, fetchImpl });
+  const { project: before } = await editor.createProject({ title: 'Concurrent source requests' });
+  const responses = [];
+  const sendingEditor = createProjectsClient({ apiKey: tokens.editor, baseUrl, fetchImpl: async (...args) => {
+    const response = await fetchImpl(...args);
+    responses.push({ status: response.status, replay: response.headers.get('Idempotency-Replayed') });
+    return response;
+  } });
+  const text2 = '{"walk":"later"}\n';
+  const body = { expected_version: before.version, name: 'later.json', media_type: 'application/json', content_text: text2, sha256: sha(text2) };
+  const prepared = sendingEditor.prepareMutation('addSource', [before.id, body]);
+  const [first, second] = await Promise.all([prepared.run(), prepared.run()]);
+  assert.deepEqual(responses.map(r => r.status), [201, 201]);
+  assert.deepEqual(responses.map(r => r.replay).sort(), [null, 'true']);
+  assert.deepEqual(first, second);
+  assert.equal(first.applied_version, before.version + 1);
+  const after = (await editor.getProject(before.id)).project;
+  assert.equal(after.version, first.applied_version);
+  assert.equal(after.sources.length, before.sources.length + 1);
+  assert.deepEqual(after.sources.filter(s => s.name === body.name).map(s => s.id), [first.resource.id]);
+  assert.equal(after.events.length, before.events.length + 1);
+  assert.equal(after.events.at(-1).resource_id, first.resource.id);
+  assert.equal(after.events.at(-1).type, 'source.retained');
+
+  const next = { ...body, expected_version: after.version, name: 'next.json' };
+  const conflictKey = { idempotencyKey: createIdempotencyKey() };
+  const results = await Promise.allSettled([editor.addSource(before.id, next, conflictKey),
+    editor.addSource(before.id, { ...next, name: 'other.json' }, conflictKey)]);
+  assert.deepEqual(results.map(r => r.status).sort(), ['fulfilled', 'rejected']);
+  const success = results.find(r => r.status === 'fulfilled');
+  const conflict = results.find(r => r.status === 'rejected');
+  assert.equal(conflict.reason.status, 409);
+  assert.equal(conflict.reason.code, 'idempotency-conflict');
+  const retry = { ...next, expected_version: success.value.applied_version };
+  const retryKey = { idempotencyKey: createIdempotencyKey() };
+  await assert.rejects(editor.addSource(before.id, { ...retry, sha256: '0'.repeat(64) }, retryKey),
+    { status: 422, code: 'source-hash-mismatch' });
+  const corrected = await editor.addSource(before.id, retry, retryKey);
+  const final = (await editor.getProject(before.id)).project;
+  assert.equal(final.version, after.version + 2);
+  assert.equal(final.sources.length, after.sources.length + 2);
+  assert.ok(final.sources.some(s => s.id === corrected.resource.id));
+}
+
+test('sandbox and production mutation contracts', async t => {
   const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_later_${randomUUID().slice(0, 8)}` });
   try {
-    const real = await laterOutcomes({ baseUrl: `${fixture.url}/api/world/v1`,
-      tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) });
+    const tokens = Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token]));
     const sandbox = createSandboxApi();
-    const simulated = await laterOutcomes({ baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals });
-    assert.deepEqual(real, { verifiedThen: 'verified', withdrawn: 'stale', reason: 'A later physical trial did not pass. The recorded verification needs a new review.',
-      sameSource: true, copies: 1, versionStep: 1 });
-    assert.deepEqual(simulated, real);
+    for (const [name, api] of [
+      ['production', { baseUrl: `${fixture.url}/api/world/v1`, tokens }],
+      ['sandbox', { baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals }],
+    ]) {
+      for (const outcome of ['fail', 'inconclusive']) {
+        await t.test(`${name}: latest physical ${outcome} withdraws verification`, () => checkTrialInvalidation(api, outcome));
+      }
+      await t.test(`${name}: concurrent source requests apply once and replay once`, () => checkConcurrentSources(api));
+    }
   } finally {
     await fixture.close();
   }
