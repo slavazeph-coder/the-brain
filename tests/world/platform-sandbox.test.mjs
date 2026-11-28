@@ -24,7 +24,7 @@ function signature(value, prefix = '', out = new Set()) {
   return out;
 }
 
-async function workflow({ baseUrl, fetchImpl, tokens }) {
+async function workflow({ baseUrl, fetchImpl, tokens }, unsuccessfulOutcome) {
   const client = role => createProjectsClient({ apiKey: tokens[role], baseUrl, fetchImpl });
   const raw = async (role, path, init = {}) => {
     const response = await (fetchImpl || globalThis.fetch)(baseUrl + path, { ...init, headers: { Authorization: `Bearer ${tokens[role]}`, ...(init.headers || {}) } });
@@ -77,14 +77,41 @@ async function workflow({ baseUrl, fetchImpl, tokens }) {
   project = measured.project;
   project = (await step('confirm measurement', () => reviewer.reviewEvidence(project.id, measured.resource.id, { expected_version: project.version, decision: 'confirmed', reason: 'Tape photo.' }))).project;
   const trialAt = Date.now() + 1000;
-  const physical = (outcome, at) => editor.createTrial(project.id, { expected_version: project.version, revision_id: proposed.resource.id, robot_model: 'Cart AMR',
-    task: 'Dock to aisle 4 around the crate.', kind: 'physical', outcome, prediction: 'pass', source_ids: [source.resource.id], measurement_evidence_ids: [measured.resource.id],
+  const trial = (outcome, at, kind = 'physical', revision = proposed.resource) => editor.createTrial(project.id, {
+    expected_version: project.version, revision_id: revision.id, robot_model: revision.robot.model, task: revision.task.goal,
+    kind, outcome, prediction: 'pass', source_ids: [source.resource.id],
+    measurement_evidence_ids: revision.id === proposed.resource.id ? [measured.resource.id] : [],
     notes: 'Contract fixture.', occurred_at: new Date(at).toISOString() });
-  const passed = await step('physical pass', () => physical('pass', trialAt));
+  const passed = await step('physical pass', () => trial('pass', trialAt));
   project = passed.project;
-  project = (await step('later physical fail', () => physical('fail', trialAt + 1000))).project;
+  project = (await step('later physical fail', () => trial('fail', trialAt + 1000))).project;
   await step('earlier pass cannot verify', () => reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version, decision: 'verified', reason: 'Passed once.', trial_id: passed.resource.id }));
-  await step('get project', () => reader.getProject(project.id));
+
+  const latestPassAt = trialAt + 2000;
+  const latestPass = await trial('pass', latestPassAt);
+  project = latestPass.project;
+  const verified = await reviewer.decideChange(project.id, change.resource.id, { expected_version: project.version,
+    decision: 'verified', reason: 'Latest physical pass.', trial_id: latestPass.resource.id });
+  assert.equal(verified.resource.status, 'verified');
+  project = verified.project;
+  const recordedChange = p => p.changes.find(c => c.id === change.resource.id);
+  project = (await trial('fail', latestPassAt - 1)).project;
+  assert.equal(recordedChange(project).status, 'verified', 'a backdated failure preserves verification');
+  project = (await trial('fail', latestPassAt + 1000, 'simulation')).project;
+  assert.equal(recordedChange(project).status, 'verified', 'a simulation preserves verification');
+  project = (await trial('fail', latestPassAt + 1000, 'physical', asIs.resource)).project;
+  assert.equal(recordedChange(project).status, 'verified', 'another revision preserves verification');
+
+  // A later record breaks a tie on occurrence time. Both unsuccessful outcomes invalidate verification.
+  const occurredAt = unsuccessfulOutcome === 'fail' ? latestPassAt + 1000 : latestPassAt;
+  const unsuccessful = await trial(unsuccessfulOutcome, occurredAt);
+  assert.equal(unsuccessful.project.version, project.version + 1);
+  const readBack = await step('get project', () => reader.getProject(project.id));
+  const stale = recordedChange(readBack.project);
+  assert.equal(stale.status, 'stale', `the latest physical ${unsuccessfulOutcome} invalidates verification`);
+  assert.equal(stale.stale_reason, 'A later physical trial did not pass. The recorded verification needs a new review.');
+  assert.ok(Number.isFinite(Date.parse(stale.stale_at)));
+  assert.equal(readBack.project.readiness.counts.stale_changes, 1);
   await step('get source', () => reader.getSource(project.id, source.resource.id));
   await step('reader cannot write', () => reader.createProject({ title: 'Nope' }));
   await step('empty title refused', () => editor.createProject({ title: '' }));
@@ -109,14 +136,14 @@ async function workflow({ baseUrl, fetchImpl, tokens }) {
   return steps;
 }
 
-test('the sandbox answers the scripted workflow exactly like the real service', async () => {
+async function assertWorkflowContract(unsuccessfulOutcome) {
   // A fresh workspace, so the real service starts as empty as the sandbox even on a shared CI database.
   const fixture = await startProjectPlatformFixture({ tenantId: `tenant_platform_contract_${randomUUID().slice(0, 8)}` });
   try {
     const real = await workflow({ baseUrl: `${fixture.url}/api/world/v1`,
-      tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) });
+      tokens: Object.fromEntries(Object.entries(fixture.credentials).map(([role, value]) => [role, value.token])) }, unsuccessfulOutcome);
     const sandbox = createSandboxApi();
-    const simulated = await workflow({ baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals });
+    const simulated = await workflow({ baseUrl: '/api/world/v1', fetchImpl: sandbox.fetch, tokens: sandbox.principals }, unsuccessfulOutcome);
     assert.deepEqual(simulated.map(s => s.name), real.map(s => s.name));
     for (const [index, expected] of real.entries()) {
       const actual = simulated[index];
@@ -143,6 +170,70 @@ test('the sandbox answers the scripted workflow exactly like the real service', 
   } finally {
     await fixture.close();
   }
+}
+
+for (const outcome of ['fail', 'inconclusive']) {
+  test(`the sandbox matches the service workflow including a later physical ${outcome}`, () => assertWorkflowContract(outcome));
+}
+
+test('concurrent source writes replay identical requests, reject conflicts and recover from errors', async t => {
+  async function check(baseUrl, apiKey, fetchImpl) {
+    const client = createProjectsClient({ apiKey, baseUrl, fetchImpl });
+    const { project } = await client.createProject({ title: 'Concurrent source requests' });
+    const send = async (key, body) => {
+      const response = await fetchImpl(`${baseUrl}/projects/${project.id}/sources`, {
+        method: 'POST', body: JSON.stringify(body),
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      });
+      return { status: response.status, replayed: response.headers.get('Idempotency-Replayed'), body: await response.json() };
+    };
+    async function assertPersisted(sourceIds) {
+      const persisted = (await client.getProject(project.id)).project;
+      assert.equal(persisted.version, project.version + sourceIds.length);
+      assert.deepEqual(persisted.sources.map(s => s.id).sort(), [...sourceIds].sort());
+      assert.equal(persisted.events.filter(e => e.type === 'source.retained').length, sourceIds.length);
+    }
+
+    const source = { name: 'scan.txt', media_type: 'text/plain', content_text: 'One scan', expected_version: project.version };
+    const key = createIdempotencyKey();
+    const identical = await Promise.all([send(key, source), send(key, source)]);
+    assert.deepEqual(identical.map(r => r.status), [201, 201]);
+    assert.equal(identical.filter(r => r.replayed === null).length, 1, 'one original response');
+    assert.equal(identical.filter(r => r.replayed === 'true').length, 1, 'one replay');
+    const first = identical[0].body;
+    assert.deepEqual(identical[1].body, first);
+    assert.equal(first.applied_version, project.version + 1);
+    await assertPersisted([first.resource.id]);
+
+    const different = { ...source, expected_version: first.applied_version, name: 'second.txt' };
+    const conflictKey = createIdempotencyKey();
+    const conflicting = await Promise.all([send(conflictKey, different), send(conflictKey, { ...different, name: 'third.txt' })]);
+    assert.deepEqual(conflicting.map(r => r.status).sort(), [201, 409]);
+    assert.equal(conflicting.find(r => r.status === 409).body.error.code, 'idempotency-conflict');
+    const accepted = conflicting.find(r => r.status === 201);
+    assert.equal(accepted.replayed, null);
+    await assertPersisted([first.resource.id, accepted.body.resource.id]);
+
+    const retryKey = createIdempotencyKey();
+    const retry = { ...source, expected_version: accepted.body.applied_version, name: 'corrected.txt' };
+    const rejected = await send(retryKey, { ...retry, sha256: '0'.repeat(64) });
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.body.error.code, 'source-hash-mismatch');
+    const corrected = await send(retryKey, { ...retry, sha256: sha(retry.content_text) });
+    assert.equal(corrected.status, 201);
+    assert.equal(corrected.replayed, null);
+    await assertPersisted([first.resource.id, accepted.body.resource.id, corrected.body.resource.id]);
+  }
+
+  await t.test('sandbox', async () => {
+    const sandbox = createSandboxApi();
+    await check('/api/world/v1', sandbox.principals.editor, sandbox.fetch);
+  });
+  await t.test('production handlers', async t => {
+    const fixture = await startProjectPlatformFixture({ tenantId: `tenant_source_race_${randomUUID().slice(0, 8)}` });
+    t.after(() => fixture.close());
+    await check(`${fixture.url}/api/world/v1`, fixture.credentials.editor.token, fetch);
+  });
 });
 
 test('the sandbox is private to the page and says it is a sandbox', async () => {
