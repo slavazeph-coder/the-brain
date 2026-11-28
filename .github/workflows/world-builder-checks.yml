@@ -46,7 +46,9 @@ jobs:
   world-contracts:
     runs-on: ubuntu-24.04
     # Bound each download phase separately, leaving time for the unchanged tests on a cold runner.
-    timeout-minutes: 30
+    # The job takes 22-27 minutes since the world-update loop tests joined it (#340), and a runner about 25% slower
+    # passed 30 minutes four times in a day with every test passing; 40 keeps a backstop with that headroom.
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
