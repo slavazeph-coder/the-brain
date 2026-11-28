@@ -331,24 +331,49 @@ def astar(free, start, goal):
     return None
 
 
-def line_cells(a, b):
-    """Every cell a straight segment between two cell centres passes through (a supercover). Where it crosses exactly
-    at a grid corner, both side cells count, which is A*'s no-corner-cutting rule; sampling points can miss them."""
+def segment_steps(a, b):
+    """Walk a straight segment between two cell centres cell by cell (a supercover). Yields each cell entered with the
+    cells touched to enter it: a crossing exactly at a grid corner touches both side cells too, A*'s no-corner-cutting
+    rule. Sampling points along the segment can miss those cells."""
     (x, y), (x1, y1) = (int(a[0]), int(a[1])), (int(b[0]), int(b[1]))
     nx, ny = abs(x1 - x), abs(y1 - y)
     sx, sy = (x1 > x) - (x1 < x), (y1 > y) - (y1 < y)
-    cells, ix, iy = [(x, y)], 0, 0
+    ix = iy = 0
     while ix < nx or iy < ny:
         d = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx  # which cell boundary the segment reaches first
         if d == 0:
-            cells += [(x + sx, y), (x, y + sy)]
+            sides = [(x + sx, y), (x, y + sy)]
             x, y, ix, iy = x + sx, y + sy, ix + 1, iy + 1
+            yield (x, y), sides + [(x, y)]
         elif d < 0:
             x, ix = x + sx, ix + 1
+            yield (x, y), [(x, y)]
         else:
             y, iy = y + sy, iy + 1
-        cells.append((x, y))
+            yield (x, y), [(x, y)]
+
+
+def line_cells(a, b):
+    """Every cell a straight segment between two cell centres passes through, corner crossings' side cells included."""
+    cells = [(int(a[0]), int(a[1]))]
+    for _, touched in segment_steps(a, b):
+        cells += touched
     return cells
+
+
+def route_visibility(points, observed):
+    """For a route of straight segments between cells: the unobserved share of every cell it passes through, and its
+    longest run through unobserved cells (in cells; a step is unseen if any cell it touches is). Measured on the
+    published segments, not the A* cells they replace, which can run through other cells."""
+    import numpy as np
+    start = tuple(int(v) for v in points[0])
+    cells, previous, run, best = {start}, start, 0., 0.
+    for a, b in zip(points, points[1:]):
+        for cell, touched in segment_steps(a, b):
+            cells.update(touched)
+            run = run + math.dist(previous, cell) if not all(observed[c] for c in touched) else 0.
+            best, previous = max(best, run), cell
+    return float(np.mean([not observed[c] for c in cells])), best
 
 
 def line_free(free, a, b):
@@ -365,15 +390,6 @@ def simplify(path, free):
         out.append(path[j])
         i = j
     return out
-
-
-def longest_unseen(path, observed):
-    """Longest run of consecutive path cells nobody observed, in cells (diagonal steps count sqrt 2)."""
-    best = run = 0.
-    for a, b in zip(path, path[1:]):
-        run = run + math.dist(a, b) if not observed[b] else 0.
-        best = max(best, run)
-    return best
 
 
 def route_length(points):
@@ -864,10 +880,12 @@ def update(workspace: Path, source_dir: Path, frames, request: dict, scratch: Pa
         for when in ('before', 'after'):
             path = plan[when]
             if path:
-                waypoints = as_metres(simplify(path, before_free if when == 'before' else after_free))
+                simple = simplify(path, before_free if when == 'before' else after_free)
+                waypoints = as_metres(simple)
+                unseen, longest = route_visibility(simple, observed)
                 entry[when] = {'length_m': round(route_length(waypoints), 3), 'waypoints': waypoints,
-                               'cells': len(path), 'unobserved_fraction': round(float(np.mean([not observed[c] for c in path])), 3),
-                               'longest_unseen_m': round(longest_unseen(path, observed) * grid.cell, 2)}
+                               'cells': len(path), 'unobserved_fraction': round(unseen, 3),
+                               'longest_unseen_m': round(longest * grid.cell, 2)}
             else:
                 entry[when] = None
         entry['changed_by'] = []

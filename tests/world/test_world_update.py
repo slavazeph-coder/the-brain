@@ -159,6 +159,25 @@ def test_a_straight_shortcut_may_not_slip_between_blocked_cells():
     assert all(wu.line_free(free, a, b) for a, b in zip(waypoints, waypoints[1:]))
 
 
+def test_unseen_space_is_measured_along_the_published_segments_not_the_cells_they_replace():
+    free = np.ones((10, 10), bool)
+    path = wu.astar(free, (1, 1), (8, 5))
+    observed = np.zeros((10, 10), bool)
+    for cell in path:
+        observed[cell] = True  # every A* cell seen, yet the published shortcut runs beside them
+    simple = wu.simplify(path, free)
+    assert simple == [(1, 1), (8, 5)]
+    fraction, longest = wu.route_visibility(simple, observed)
+    assert fraction > 0 and longest > 0
+    assert not any(not observed[c] for c in path)  # the old measurement, over the A* cells only, saw nothing unseen
+    everything = np.ones((10, 10), bool)
+    assert wu.route_visibility(simple, everything) == (0.0, 0.0)
+    nothing = np.zeros((10, 10), bool)
+    fraction, longest = wu.route_visibility(simple, nothing)
+    assert fraction == 1.0 and longest == pytest.approx(sum(math.dist(a, b) for a, b in zip(
+        [(1, 1)] + [c for c, _ in wu.segment_steps((1, 1), (8, 5))][:-1], [c for c, _ in wu.segment_steps((1, 1), (8, 5))])))
+
+
 def test_simplified_route_keeps_clear_lines():
     free = ~wu.inflate(np.pad(np.ones((6, 4), dtype=bool), ((7, 7), (18, 18))), 1)
     path = wu.astar(free, (1, 1), (18, 38))

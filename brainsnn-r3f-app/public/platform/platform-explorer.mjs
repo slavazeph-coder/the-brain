@@ -97,9 +97,10 @@ async function detail(op) {
     sendButton.disabled = true;
     try {
       const result = await rawSend({ method: op.method, path, body, isPublic: op.public, idempotencyKey: lastKey });
+      // Learn first: the result's "Next" suggestion reads what this response just created.
+      if (result.ok) state.context = learn(state.context, op, result.body);
       showResult(result);
       if (result.ok) {
-        state.context = learn(state.context, op, result.body);
         done('request');
         if (op.id === 'createProject') done('project');
         if (op.id === 'addEvidence') done('evidence');

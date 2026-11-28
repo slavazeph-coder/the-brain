@@ -92,7 +92,12 @@ try {
   await page.getByRole('button', { name: 'Send again with the same Idempotency-Key' }).click();
   await page.getByText('Replayed: same key, same answer').waitFor();
   assert.equal((await sdk('editor').listProjects()).projects.length, 1, 'the replay created nothing');
-  for (const [op, status] of [['addSource', 201], ['createRevision', 201], ['createRevision', 201], ['addEvidence', 201], ['createChange', 201]]) await explorerSend(page, op, status);
+  await explorerSend(page, 'addSource', 201);
+  await explorerSend(page, 'createRevision', 201);
+  assert.match(await page.locator('.pf-next button').innerText(), /Record the proposed revision/, 'next step after the as-is revision');
+  await explorerSend(page, 'createRevision', 201);
+  assert.match(await page.locator('.pf-next button').innerText(), /Add evidence/, 'next step after the proposed revision');
+  for (const [op, status] of [['addEvidence', 201], ['createChange', 201]]) await explorerSend(page, op, status);
   await page.getByRole('button', { name: /Confirm the evidence/ }).waitFor();
   await page.screenshot({ path: join(output, 'explorer.png'), fullPage: true });
   // The editor cannot decide: the explorer shows the API's refusal and what to do.
